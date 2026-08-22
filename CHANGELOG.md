@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A GM could rewind the campaign a day by clicking `−1 day` when they meant `+1 day`,
   after the drift strip appeared mid-combat and moved the button row. Removing the
   control and stabilising the header closes both halves of that.
+- Saving the configuration window no longer rewinds the campaign date or clock. The
+  window edits a snapshot taken when it opened, and it carried that snapshot's date
+  and time into the save, so a window left open while the campaign advanced put the
+  old values back. Date fields the GM edited are still theirs; fields left alone now
+  take the campaign date as it stands, and the clock — which has no field in this
+  window — is always read live.
 - Two time changes starting at once no longer lose one of them. A time change measures
   its delta from the date as it stands and then waits on Foundry twice before writing
   the result, so a second change beginning in that window worked from a date that was
