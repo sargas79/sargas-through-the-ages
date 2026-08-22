@@ -23,6 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A GM could rewind the campaign a day by clicking `−1 day` when they meant `+1 day`,
   after the drift strip appeared mid-combat and moved the button row. Removing the
   control and stabilising the header closes both halves of that.
+- A fight no longer fills the notification queue. Every combat round advances Foundry
+  world time by a few seconds without asking this module, and each one raised its own
+  "world time changed outside Through the Ages" warning. GMs now get one warning per
+  divergence, and the next only once the two clocks have agreed again. The drift strip
+  is unchanged and still stands until it is acknowledged.
+- One GM acknowledging a drift now clears the strip in every other GM's window instead
+  of leaving it on screen until something else re-rendered it.
 - Saving the configuration window no longer rewinds the campaign date or clock. The
   window edits a snapshot taken when it opened, and it carried that snapshot's date
   and time into the save, so a window left open while the campaign advanced put the
