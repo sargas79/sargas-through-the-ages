@@ -58,11 +58,14 @@ export function registerSettings() {
     default: 0
   });
 
+  // One GM acknowledging a drift clears it for every other GM's window too,
+  // which only happens if the change is re-rendered everywhere.
   game.settings.register(MODULE_ID, SETTINGS.WORLD_TIME, {
     scope: "world",
     config: false,
     type: Number,
-    default: null
+    default: null,
+    onChange: () => rerenderModuleApps()
   });
 
   // --- GM-facing options ----------------------------------------------------

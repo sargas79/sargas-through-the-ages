@@ -3,7 +3,7 @@
  * campaign date. All writes are GM-only; reads are safe for every client.
  */
 
-import { log, rerenderModuleApps, t } from "../compat.js";
+import { isDebug, log, rerenderModuleApps, t } from "../compat.js";
 import { MODULE_ID, SETTINGS } from "../constants.js";
 import { findAgeForYear, visibleAges } from "./age-service.js";
 import {
@@ -137,6 +137,17 @@ export async function setCurrentDateTime(date, time) {
 
   const targetTime = clampTime(time);
   const updated = { ...data, calendar: { ...calendar, currentDate: target, currentTime: targetTime } };
+  // Every campaign-date move passes through here, so this is the one place that
+  // can answer "what moved the date, and who asked for it" after the fact. The
+  // stack is only worth collecting when someone is actually reading the log.
+  if (isDebug()) {
+    log("debug", "Campaign date set", {
+      from: { date: calendar.currentDate, time: calendar.currentTime },
+      to: { date: target, time: targetTime },
+      user: game.user?.name,
+      stack: new Error().stack
+    });
+  }
   await game.settings.set(MODULE_ID, SETTINGS.CALENDAR_DATA, updated);
   Hooks.callAll(`${MODULE_ID}.timeChanged`, { date: target, time: targetTime });
   Hooks.callAll(`${MODULE_ID}.dateChanged`, target);
@@ -259,6 +270,9 @@ async function applyTimeChange(date, time) {
       latest: { date: latest.currentDate, time: latest.currentTime }
     });
     ui.notifications.warn(t("TTA.Errors.TimeRaced"));
+    // The clocks now differ and the GM has just been told why, so the drift
+    // strip stands on its own without a second toast behind it.
+    reportedDrift = true;
     rerenderModuleApps();
     return null;
   }
@@ -296,14 +310,35 @@ export async function acknowledgeWorldTime() {
     return false;
   }
   await game.settings.set(MODULE_ID, SETTINGS.WORLD_TIME, game.time.worldTime);
+  reportedDrift = false;
   return true;
 }
+
+/**
+ * Whether the GM has already been told about the divergence now on screen.
+ *
+ * A combat round advances Foundry world time by a few seconds without asking
+ * this module, and so does every round after it. The drift strip is the standing
+ * report; a toast per round on top of it says nothing new and buries whatever
+ * else is in the notification queue. One toast per divergence is enough, and the
+ * next one is due only once the clocks have agreed again.
+ */
+let reportedDrift = false;
 
 /** Warn GMs when another source changes Foundry world time independently. */
 export function onWorldTimeUpdated(worldTime) {
   const checkpoint = game.settings.get(MODULE_ID, SETTINGS.WORLD_TIME);
-  if (typeof checkpoint !== "number" || !Number.isFinite(checkpoint) || worldTime === checkpoint) return;
-  if (isGM()) ui.notifications.warn(t("TTA.Errors.TimeOutOfSync"));
+  if (typeof checkpoint !== "number" || !Number.isFinite(checkpoint)) return;
+
+  if (worldTime === checkpoint) {
+    reportedDrift = false;
+    return;
+  }
+
+  if (isGM() && !reportedDrift) {
+    ui.notifications.warn(t("TTA.Errors.TimeOutOfSync"));
+    reportedDrift = true;
+  }
   log("warn", "Foundry world time changed outside Through the Ages", { worldTime, checkpoint });
   rerenderModuleApps();
 }
