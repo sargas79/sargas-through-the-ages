@@ -6,7 +6,7 @@
  * client. Only the GM time controls change the shared campaign date.
  */
 
-import { confirmDialog, enrichHTML, isDebug, log, promptForm, renderTemplate, t } from "../compat.js";
+import { confirmDialog, enrichHTML, html, isDebug, log, promptForm, renderTemplate, t, trustedHTML } from "../compat.js";
 import { MODULE_ID, SCOPE } from "../constants.js";
 import { endYear } from "../services/age-service.js";
 import {
@@ -411,16 +411,16 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const current = clampDate(startDate, calendar);
     const currentTime = getCurrentTime();
     const monthOptions = calendar.monthNames
-      .map((name, index) => `<option value="${index + 1}" ${index + 1 === current.month ? "selected" : ""}>${foundry.utils.escapeHTML(name)}</option>`)
+      .map((name, index) => html`<option value="${index + 1}" ${trustedHTML(index + 1 === current.month ? "selected" : "")}>${name}</option>`)
       .join("");
 
     const result = await promptForm({
       title: t("TTA.Time.SetDateTitle"),
-      content: `<div class="tta-prompt tta-prompt-grid">
+      content: html`<div class="tta-prompt tta-prompt-grid">
         <label for="tta-set-year">${t("TTA.Common.Year")}</label>
         <input id="tta-set-year" type="number" name="year" min="1" step="1" value="${current.year}">
         <label for="tta-set-month">${t("TTA.Common.Month")}</label>
-        <select id="tta-set-month" name="month">${monthOptions}</select>
+        <select id="tta-set-month" name="month">${trustedHTML(monthOptions)}</select>
         <label for="tta-set-day">${t("TTA.Common.Day")}</label>
         <input id="tta-set-day" type="number" name="day" min="1" max="${daysInMonth(current.month, calendar)}" step="1" value="${current.day}">
         <label for="tta-set-hour">${t("TTA.Common.Time")}</label>
@@ -488,7 +488,7 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
     const confirmed = await confirmDialog({
       title: t("TTA.Notes.DeleteTitle"),
-      content: `<p>${t("TTA.Notes.DeleteBody", { title: note.title })}</p>`,
+      content: html`<p>${t("TTA.Notes.DeleteBody", { title: note.title })}</p>`,
       yesLabel: t("TTA.Common.Delete"),
       yesIcon: "fa-solid fa-trash"
     });

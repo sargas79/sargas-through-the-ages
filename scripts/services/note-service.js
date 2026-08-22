@@ -229,8 +229,30 @@ export function getPromotableNotes() {
  * who sent it, so a crafted socket message cannot forge authorship or escalate
  * a note's visibility.
  */
+/**
+ * Refuse a relayed request that claims an identity it cannot have.
+ *
+ * The module socket carries no authenticated sender, so the `userId` on a
+ * request is whatever the sending client wrote. That cannot be repaired here —
+ * see the transport note in `socket-service.js` — but two claims are refusable
+ * on their face, and both are the ones worth refusing:
+ *
+ * A GM never relays. `createNote`, `updateNote` and `deleteNote` all write
+ * directly when the caller is a GM, so a request claiming to come from one is
+ * forged by definition, and it is the claim that would otherwise grant the
+ * sender every permission this module has.
+ *
+ * An absent or disconnected user cannot be at a keyboard asking for anything.
+ */
+function assertRelayable(user) {
+  if (!user) throw new Error("Unknown requesting user");
+  if (isGM(user)) throw new Error(t("TTA.Errors.RelayNotForGM"));
+  if (!user.active) throw new Error(t("TTA.Errors.RelayUserInactive"));
+}
+
 export function registerSocketHandlers() {
   registerHandler(SOCKET_OPS.CREATE_NOTE, async (payload, user) => {
+    assertRelayable(user);
     if (!canCreateNote(payload.scope, user)) throw new Error(t("TTA.Errors.NoteCreationDenied"));
     const safe = {
       dateKey: payload.dateKey,
@@ -248,10 +270,22 @@ export function registerSocketHandlers() {
   });
 
   registerHandler(SOCKET_OPS.UPDATE_NOTE, async (payload, user) => {
+    assertRelayable(user);
     const page = await fromUuid(payload.pageUuid);
     const flags = journal.readNoteFlags(page);
     if (!flags) throw new Error(t("TTA.Errors.NoteMissing"));
     if (!canEditNote(flags, user)) throw new Error(t("TTA.Errors.NoteEditDenied"));
+
+    // The create handler has always validated its payload and this one never
+    // did, so a relayed edit was the way round every bound the module sets.
+    assertValid({
+      dateKey: flags.dateKey,
+      scope: flags.scope,
+      title: payload.title ?? page.name,
+      content: payload.content ?? "",
+      visibility: flags.visibility
+    });
+
     // A relayed request may never change visibility: only a GM acting directly can.
     await journal.updateNotePage(payload.pageUuid, {
       title: payload.title,
@@ -261,6 +295,7 @@ export function registerSocketHandlers() {
   });
 
   registerHandler(SOCKET_OPS.DELETE_NOTE, async (payload, user) => {
+    assertRelayable(user);
     const page = await fromUuid(payload.pageUuid);
     const flags = journal.readNoteFlags(page);
     if (!flags) throw new Error(t("TTA.Errors.NoteMissing"));

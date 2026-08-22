@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { LIMITS } from "../scripts/constants.js";
 import {
+  ageLength,
   chronological,
   containsYear,
   endYear,
@@ -129,5 +131,41 @@ describe("normalisation and visibility", () => {
     const ages = [age("open", 1, 10), age("secret", 11, 10, { playerVisible: false })];
     assert.deepEqual(visibleAges(ages, false).map(a => a.id), ["open"]);
     assert.deepEqual(visibleAges(ages, true).map(a => a.id), ["open", "secret"]);
+  });
+});
+
+describe("age length", () => {
+  it("counts the years an Age covers without building the list", () => {
+    assert.equal(ageLength({ startYear: 1, durationYears: 1 }), 1);
+    assert.equal(ageLength({ startYear: 100, durationYears: 50 }), 50);
+  });
+
+  it("agrees with yearsInAge, which it replaced in the timeline", () => {
+    for (const duration of [1, 2, 7, 100]) {
+      const age = { startYear: 42, durationYears: duration };
+      assert.equal(ageLength(age), yearsInAge(age).length, `duration ${duration}`);
+    }
+  });
+});
+
+describe("age duration bounds", () => {
+  // A duration of a few million years used to be stored as given, and the
+  // timeline then built one array entry per year on every render.
+  it("clamps a duration past the supported maximum", () => {
+    const normalized = normalizeAge({ name: "Long", startYear: 1, durationYears: 1e9 });
+    assert.equal(normalized.durationYears, LIMITS.AGE_DURATION_MAX);
+  });
+
+  it("leaves an ordinary duration untouched", () => {
+    assert.equal(normalizeAge({ name: "Ord", startYear: 1, durationYears: 250 }).durationYears, 250);
+  });
+
+  it("still raises a duration below the minimum", () => {
+    assert.equal(normalizeAge({ name: "Zero", startYear: 1, durationYears: 0 }).durationYears, LIMITS.AGE_DURATION_MIN);
+  });
+
+  it("keeps the clamped length small enough to render", () => {
+    const normalized = normalizeAge({ name: "Long", startYear: 1, durationYears: Number.MAX_SAFE_INTEGER });
+    assert.ok(ageLength(normalized) <= LIMITS.AGE_DURATION_MAX);
   });
 });

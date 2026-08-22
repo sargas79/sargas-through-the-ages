@@ -83,6 +83,21 @@ export const LIMITS = {
   WEEKDAYS_MAX: 14,
   YEAR_MIN: 1,
   AGE_DURATION_MIN: 1,
+  /**
+   * Ages are drawn as a band and a row of ticks, and the timeline used to build
+   * one array entry per year to do it, so a duration of a few million years was
+   * enough to hang every client that opened the window. The rendering no longer
+   * scales with the span, but a duration this far past any published setting's
+   * history is a mistake or an attack rather than a campaign, and it is cheaper
+   * to refuse it than to reason about every consumer downstream.
+   */
+  AGE_DURATION_MAX: 100000,
+  /**
+   * Note bounds. A relayed write carries whatever the requesting client sent,
+   * so these are what stop one player filling the world database.
+   */
+  NOTE_TITLE_MAX: 200,
+  NOTE_CONTENT_MAX: 100000,
   MOONS_MAX: 12,
   MOON_CYCLE_MIN: 2,
   MOON_CYCLE_MAX: 1000,

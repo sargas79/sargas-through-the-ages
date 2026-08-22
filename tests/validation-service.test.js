@@ -348,3 +348,53 @@ describe("moons at the raised limit", () => {
     assert.equal(locked.length, 0);
   });
 });
+
+describe("note bounds", () => {
+  const calendar = { monthsPerYear: 12, daysPerMonth: 30, monthLengths: Array(12).fill(30) };
+  const note = extra => ({
+    dateKey: "0001-01-01",
+    scope: "day",
+    title: "A note",
+    visibility: "author-and-gm",
+    ...extra
+  });
+
+  it("accepts a note inside the limits", () => {
+    assert.equal(validateNote(note(), calendar).valid, true);
+  });
+
+  // A relayed write carries whatever the requesting client sent, so these are
+  // the only bounds standing between one player and the world database.
+  it("rejects a title past the limit", () => {
+    const result = validateNote(note({ title: "x".repeat(LIMITS.NOTE_TITLE_MAX + 1) }), calendar);
+    assert.equal(result.valid, false);
+    assert.ok(result.errors.some(error => error.code === "noteTitleLength"));
+  });
+
+  it("accepts a title exactly at the limit", () => {
+    assert.equal(validateNote(note({ title: "x".repeat(LIMITS.NOTE_TITLE_MAX) }), calendar).valid, true);
+  });
+
+  it("rejects a body past the limit", () => {
+    const result = validateNote(note({ content: "x".repeat(LIMITS.NOTE_CONTENT_MAX + 1) }), calendar);
+    assert.equal(result.valid, false);
+    assert.ok(result.errors.some(error => error.code === "noteContentLength"));
+  });
+
+  it("still treats a missing body as valid, since most notes have none", () => {
+    assert.equal(validateNote(note({ content: undefined }), calendar).valid, true);
+  });
+});
+
+describe("age duration bounds", () => {
+  it("rejects a duration past the supported maximum", () => {
+    const result = validateAges([{ name: "Long", startYear: 1, durationYears: LIMITS.AGE_DURATION_MAX + 1 }]);
+    assert.equal(result.valid, false);
+    assert.ok(result.errors.some(error => error.code === "ageDuration"));
+  });
+
+  it("accepts a duration exactly at the maximum", () => {
+    const result = validateAges([{ name: "Long", startYear: 1, durationYears: LIMITS.AGE_DURATION_MAX }]);
+    assert.equal(result.valid, true);
+  });
+});

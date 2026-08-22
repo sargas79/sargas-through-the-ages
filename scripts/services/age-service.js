@@ -13,6 +13,18 @@ export function endYear(age) {
   return Number(age.startYear) + Number(age.durationYears) - 1;
 }
 
+/**
+ * How many years an Age covers.
+ *
+ * The same answer as `yearsInAge(age).length`, without building the list to
+ * count it. Everything that only needs the count uses this: the timeline asks
+ * for it once per Age on every render, and a long Age made that a per-year
+ * allocation for a number that is a subtraction.
+ */
+export function ageLength(age) {
+  return Math.max(0, endYear(age) - Number(age.startYear) + 1);
+}
+
 /** True when a year falls inside an Age's range. */
 export function containsYear(age, year) {
   return year >= Number(age.startYear) && year <= endYear(age);
@@ -83,7 +95,10 @@ export function yearsInAge(age) {
 /** Normalise an Age record, filling in derived and defaulted fields. */
 export function normalizeAge(age, index = 0) {
   const startYear = Math.max(LIMITS.YEAR_MIN, Math.trunc(Number(age?.startYear) || LIMITS.YEAR_MIN));
-  const durationYears = Math.max(LIMITS.AGE_DURATION_MIN, Math.trunc(Number(age?.durationYears) || LIMITS.AGE_DURATION_MIN));
+  const durationYears = Math.min(
+    LIMITS.AGE_DURATION_MAX,
+    Math.max(LIMITS.AGE_DURATION_MIN, Math.trunc(Number(age?.durationYears) || LIMITS.AGE_DURATION_MIN))
+  );
   return {
     id: age?.id ?? `age-${index}`,
     name: String(age?.name ?? "").trim(),
