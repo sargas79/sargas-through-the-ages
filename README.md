@@ -114,6 +114,12 @@ keeps its calendar unchanged and warns GMs. Use **Use current Foundry time** to
 acknowledge that change before using its time controls again; this only establishes a
 new synchronization checkpoint and does not alter calendar data.
 
+**Combat is the usual source of that warning.** Foundry advances world time by the
+system's round length every time a combat round passes, which this module does not
+follow: the campaign calendar stays where the GM put it, and the strip reports the
+difference. GMs are warned once per divergence rather than once per round, and the
+strip stands until it is acknowledged.
+
 Browsing months and years with the navigation arrows never changes the campaign date.
 
 ### Notes

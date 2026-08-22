@@ -18,11 +18,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   appear and push the time controls down under the pointer between a GM deciding to
   click and the click landing.
 
+### Internal
+
+- First tests for the calendar service, over a small stub of the Foundry surface it
+  uses: the world-time checkpoint, the drift report, the refusal and discard paths
+  around concurrent time changes, and a regression test holding the line that a
+  combat round moves world time without moving the campaign date.
+
 ### Fixed
 
 - A GM could rewind the campaign a day by clicking `−1 day` when they meant `+1 day`,
   after the drift strip appeared mid-combat and moved the button row. Removing the
   control and stabilising the header closes both halves of that.
+- A fight no longer fills the notification queue. Every combat round advances Foundry
+  world time by a few seconds without asking this module, and each one raised its own
+  "world time changed outside Through the Ages" warning. GMs now get one warning per
+  divergence, and the next only once the two clocks have agreed again. The drift strip
+  is unchanged and still stands until it is acknowledged.
+- One GM acknowledging a drift now clears the strip in every other GM's window instead
+  of leaving it on screen until something else re-rendered it.
+- Saving the configuration window no longer rewinds the campaign date or clock. The
+  window edits a snapshot taken when it opened, and it carried that snapshot's date
+  and time into the save, so a window left open while the campaign advanced put the
+  old values back. Date fields the GM edited are still theirs; fields left alone now
+  take the campaign date as it stands, and the clock — which has no field in this
+  window — is always read live.
+- Two time changes starting at once no longer lose one of them. A time change measures
+  its delta from the date as it stands and then waits on Foundry twice before writing
+  the result, so a second change beginning in that window worked from a date that was
+  about to move and wrote the wrong one last. A second change is now refused while one
+  is in flight, and a change that finds the date already moved by another Game Master
+  is discarded rather than applied over the top; world time keeps the seconds it
+  gained and the drift strip reports the difference.
 
 ## [2.1.0] - 2026-08-19
 
