@@ -177,20 +177,59 @@ export async function advanceToNextAdventureDay() {
   return advanceTime(secondsUntilNextAdventureDay(getCurrentTime()));
 }
 
+/** The campaign clock as a single second count, for delta arithmetic. */
+function campaignSeconds(date, time, calendar) {
+  return (toAbsoluteDay(date, calendar) * 86400) + (time.hour * 3600) + (time.minute * 60);
+}
+
+/** True when two stored date/time pairs describe the same campaign moment. */
+function isSameMoment(a, b) {
+  return a.date.year === b.date.year
+    && a.date.month === b.date.month
+    && a.date.day === b.date.day
+    && a.time.hour === b.time.hour
+    && a.time.minute === b.time.minute;
+}
+
+/**
+ * Whether a time change is part-way through.
+ *
+ * {@link advanceTo} computes its delta from a snapshot and then waits on two
+ * server round-trips before writing the result, so a second call starting in
+ * that window would work from a date that is about to change and write the
+ * wrong one last. The whole calendar payload is a single setting, so the later
+ * write wins outright rather than merging.
+ */
+let advanceInFlight = false;
+
 /** Apply a target calendar time and its matching delta to Foundry world time. */
 export async function advanceTo(date, time) {
   if (!canChangeTime()) {
     ui.notifications.warn(t("TTA.Errors.TimeGMOnly"));
     return null;
   }
+  if (advanceInFlight) {
+    log("warn", "Ignored a time change while another was still in flight", date, time);
+    ui.notifications.warn(t("TTA.Errors.TimeBusy"));
+    return null;
+  }
 
+  advanceInFlight = true;
+  try {
+    return await applyTimeChange(date, time);
+  } finally {
+    advanceInFlight = false;
+  }
+}
+
+/** The body of {@link advanceTo}, run under its in-flight guard. */
+async function applyTimeChange(date, time) {
   const calendar = getCalendar();
   const targetDate = isValidDate(date, calendar) ? date : clampDate(date, calendar);
   const targetTime = clampTime(time);
-  const currentSeconds = (toAbsoluteDay(calendar.currentDate, calendar) * 86400)
-    + (calendar.currentTime.hour * 3600) + (calendar.currentTime.minute * 60);
-  const targetSeconds = (toAbsoluteDay(targetDate, calendar) * 86400)
-    + (targetTime.hour * 3600) + (targetTime.minute * 60);
+  const snapshot = { date: calendar.currentDate, time: calendar.currentTime };
+  const currentSeconds = campaignSeconds(snapshot.date, snapshot.time, calendar);
+  const targetSeconds = campaignSeconds(targetDate, targetTime, calendar);
   const elapsedSeconds = targetSeconds - currentSeconds;
   if (elapsedSeconds === 0) return { date: calendar.currentDate, time: calendar.currentTime, elapsedSeconds: 0 };
 
@@ -204,6 +243,23 @@ export async function advanceTo(date, time) {
     await game.settings.set(MODULE_ID, SETTINGS.WORLD_TIME, currentWorldTime);
     log("error", "Failed to advance Foundry world time", error);
     ui.notifications.error(t("TTA.Errors.TimeAdvanceFailed"));
+    return null;
+  }
+
+  // The delta above was measured against a date that another client may have
+  // moved while the two awaits ran. Writing now would silently discard their
+  // change, so the run is abandoned instead: world time keeps the seconds it
+  // gained and the checkpoint goes back to its old value, which is what raises
+  // the drift strip and lets a GM decide what the calendar should say.
+  const latest = getCalendar();
+  if (!isSameMoment({ date: latest.currentDate, time: latest.currentTime }, snapshot)) {
+    await game.settings.set(MODULE_ID, SETTINGS.WORLD_TIME, currentWorldTime);
+    log("warn", "Campaign date changed while a time advance was in flight; the advance was discarded", {
+      snapshot,
+      latest: { date: latest.currentDate, time: latest.currentTime }
+    });
+    ui.notifications.warn(t("TTA.Errors.TimeRaced"));
+    rerenderModuleApps();
     return null;
   }
 
