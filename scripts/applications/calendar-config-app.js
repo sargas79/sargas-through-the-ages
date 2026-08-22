@@ -34,6 +34,19 @@ import { structuralChangeWarnings, validateCalendarData } from "../services/vali
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
+/**
+ * Hold a date inside a calendar shape, which may have fewer months or shorter
+ * ones than the calendar the date came from.
+ */
+function fitDateTo(date, monthsPerYear, monthLengths) {
+  const month = Math.min(Math.max(1, Math.trunc(date.month)), monthsPerYear);
+  return {
+    year: Math.max(LIMITS.YEAR_MIN, Math.trunc(date.year)),
+    month,
+    day: Math.min(Math.max(1, Math.trunc(date.day)), monthLengths[month - 1])
+  };
+}
+
 export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2) {
   constructor(options = {}) {
     super({ ...options, id: "tta-calendar-config" });
@@ -44,10 +57,17 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
      * The draft is a snapshot, and this window can sit open across a whole
      * session while the campaign date moves underneath it. Saving must not put
      * that stale date back, so the fields are compared against this to tell a
-     * GM who edited them from one who simply left them alone. Every render
-     * re-anchors it, since that is when the fields are repainted.
+     * GM who edited them from one who simply left them alone.
      */
     this.openingDate = { ...this.draft.calendar.currentDate };
+    /**
+     * Whether the GM has set the date in this window at any point.
+     *
+     * Once it is set, it stays set: re-reading the form paints the edit back
+     * into the fields, so a later read would find them agreeing with the date
+     * they now hold and mistake a deliberate edit for an untouched field.
+     */
+    this.dateEdited = false;
     /** Events staged by an import, written only when the form is submitted. */
     this.pendingEvents = null;
     /** Holiday notes staged by a preset, created only when the form is submitted. */
@@ -101,8 +121,9 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
     const calendar = this.draft.calendar;
     const validation = validateCalendarData(this.draft);
     // The date fields are about to be painted from the draft, so that is what
-    // "unedited" means from here until the next render.
-    this.openingDate = { ...calendar.currentDate };
+    // "unedited" means from here until the next render. A date the GM has
+    // already set is exempt: re-anchoring to it would read as untouched.
+    if (!this.dateEdited) this.openingDate = { ...calendar.currentDate };
 
     return {
       calendar,
@@ -254,16 +275,9 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
       sortOrder: index
     }));
 
-    // Hold a date inside the calendar the form is currently describing, which
-    // may have fewer months or shorter ones than the stored calendar does.
-    const fitToDraft = date => {
-      const month = Math.min(Math.max(1, Math.trunc(date.month)), monthsPerYear);
-      return {
-        year: Math.max(LIMITS.YEAR_MIN, Math.trunc(date.year)),
-        month,
-        day: Math.min(Math.max(1, Math.trunc(date.day)), monthLengths[month - 1])
-      };
-    };
+    // The calendar the form is currently describing, which may have fewer
+    // months or shorter ones than the stored calendar does.
+    const fitToDraft = date => fitDateTo(date, monthsPerYear, monthLengths);
 
     // This window can sit open for a whole session while the campaign date
     // moves in the calendar window. Date fields the GM actually edited are
@@ -277,7 +291,8 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
       month: currentMonth,
       day: number("[name='currentDay']", previous.currentDate.day)
     });
-    const dateEdited = formDate.year !== this.openingDate.year
+    this.dateEdited = this.dateEdited
+      || formDate.year !== this.openingDate.year
       || formDate.month !== this.openingDate.month
       || formDate.day !== this.openingDate.day;
 
@@ -290,7 +305,7 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
         monthLengths,
         weekdayNames: resizeNames(weekdayNames, weekdayCount, DEFAULT_WEEKDAY_NAMES, t("TTA.Config.WeekdayFallback")),
         weekdayOffset,
-        currentDate: dateEdited ? formDate : fitToDraft(live.currentDate),
+        currentDate: this.dateEdited ? formDate : fitToDraft(live.currentDate),
         currentTime: live.currentTime,
         yearPrefix: text("[name='yearPrefix']", previous.yearPrefix ?? ""),
         yearSuffix: text("[name='yearSuffix']", previous.yearSuffix ?? ""),
@@ -299,6 +314,23 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
       ages
     };
     return this.draft;
+  }
+
+  /**
+   * Take the shared date and clock again, for a save that had to wait.
+   *
+   * The form is read when Save is clicked, but a save carrying structural
+   * warnings then waits on a confirmation the GM may leave open for as long as
+   * they like, and the campaign date can move in that time. A GM who set the
+   * date in this window keeps theirs; everyone else gets what the calendar
+   * says at the moment the write actually happens.
+   */
+  #adoptLiveDate() {
+    if (this.dateEdited) return;
+    const { monthsPerYear, monthLengths } = this.draft.calendar;
+    const live = getData().calendar;
+    this.draft.calendar.currentDate = fitDateTo(live.currentDate, monthsPerYear, monthLengths);
+    this.draft.calendar.currentTime = live.currentTime;
   }
 
   static async onAddAge() {
@@ -661,6 +693,11 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
       });
       if (!confirmed) return;
     }
+
+    // Anything could have moved the campaign date while that confirmation sat
+    // open, so the date to write is settled here rather than when the form
+    // was read.
+    this.#adoptLiveDate();
 
     try {
       await saveData(this.draft);
