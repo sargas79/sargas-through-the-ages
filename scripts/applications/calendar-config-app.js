@@ -38,6 +38,16 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
   constructor(options = {}) {
     super({ ...options, id: "tta-calendar-config" });
     this.draft = migrateCalendarData(getData());
+    /**
+     * The campaign date as it was last painted into the form's date fields.
+     *
+     * The draft is a snapshot, and this window can sit open across a whole
+     * session while the campaign date moves underneath it. Saving must not put
+     * that stale date back, so the fields are compared against this to tell a
+     * GM who edited them from one who simply left them alone. Every render
+     * re-anchors it, since that is when the fields are repainted.
+     */
+    this.openingDate = { ...this.draft.calendar.currentDate };
     /** Events staged by an import, written only when the form is submitted. */
     this.pendingEvents = null;
     /** Holiday notes staged by a preset, created only when the form is submitted. */
@@ -90,6 +100,9 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
   async _prepareContext() {
     const calendar = this.draft.calendar;
     const validation = validateCalendarData(this.draft);
+    // The date fields are about to be painted from the draft, so that is what
+    // "unedited" means from here until the next render.
+    this.openingDate = { ...calendar.currentDate };
 
     return {
       calendar,
@@ -241,6 +254,33 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
       sortOrder: index
     }));
 
+    // Hold a date inside the calendar the form is currently describing, which
+    // may have fewer months or shorter ones than the stored calendar does.
+    const fitToDraft = date => {
+      const month = Math.min(Math.max(1, Math.trunc(date.month)), monthsPerYear);
+      return {
+        year: Math.max(LIMITS.YEAR_MIN, Math.trunc(date.year)),
+        month,
+        day: Math.min(Math.max(1, Math.trunc(date.day)), monthLengths[month - 1])
+      };
+    };
+
+    // This window can sit open for a whole session while the campaign date
+    // moves in the calendar window. Date fields the GM actually edited are
+    // theirs to keep; fields still holding what the window opened with take
+    // whatever the shared calendar says now, so saving configuration can never
+    // rewind the campaign. The clock has no field here at all, so it is always
+    // read live rather than carried in the draft.
+    const live = getData().calendar;
+    const formDate = fitToDraft({
+      year: number("[name='currentYear']", previous.currentDate.year),
+      month: currentMonth,
+      day: number("[name='currentDay']", previous.currentDate.day)
+    });
+    const dateEdited = formDate.year !== this.openingDate.year
+      || formDate.month !== this.openingDate.month
+      || formDate.day !== this.openingDate.day;
+
     this.draft = {
       ...this.draft,
       calendar: {
@@ -250,12 +290,8 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
         monthLengths,
         weekdayNames: resizeNames(weekdayNames, weekdayCount, DEFAULT_WEEKDAY_NAMES, t("TTA.Config.WeekdayFallback")),
         weekdayOffset,
-        currentDate: {
-          year: Math.max(LIMITS.YEAR_MIN, number("[name='currentYear']", previous.currentDate.year)),
-          month: currentMonth,
-          day: Math.min(Math.max(1, number("[name='currentDay']", previous.currentDate.day)), monthLengths[currentMonth - 1])
-        },
-        currentTime: previous.currentTime,
+        currentDate: dateEdited ? formDate : fitToDraft(live.currentDate),
+        currentTime: live.currentTime,
         yearPrefix: text("[name='yearPrefix']", previous.yearPrefix ?? ""),
         yearSuffix: text("[name='yearSuffix']", previous.yearSuffix ?? ""),
         moons
