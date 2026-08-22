@@ -6,9 +6,16 @@
 
 export const MODULE_ID = "through-the-ages";
 export const MODULE_TITLE = "Through the Ages";
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const NOTES_FOLDER_NAME = "Calendar Notes";
+
+/**
+ * The GM-only entry inside the notes folder. It holds hidden Ages and GM-only
+ * timeline events, which used to sit in world settings where every client could
+ * read them. See `private-store-service.js`.
+ */
+export const PRIVATE_ENTRY_NAME = "Calendar (GM only)";
 
 /** World and client setting keys. */
 export const SETTINGS = {
@@ -32,7 +39,10 @@ export const FLAGS = {
   /** Relay traffic, written on the requesting user's own User document. */
   REQUESTS: "requests",
   RESPONSES: "responses",
-  RELAY_PROBE: "relayProbe"
+  RELAY_PROBE: "relayProbe",
+  /** Marks the GM-only entry, and carries its payload. */
+  PRIVATE_ENTRY: "privateStore",
+  PRIVATE_DATA: "privateData"
 };
 
 /** Note visibility classifications. */

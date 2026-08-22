@@ -408,6 +408,7 @@
       "NoteEditDenied": "You can only edit your own notes.",
       "NoteMissing": "That note no longer exists.",
       "NoteNotManaged": "That page is not a calendar note.",
+      "PrivateStoreUnavailable": "The GM-only calendar store could not be created, so nothing was saved.",
       "RelayNotForGM": "A Game Master's writes are never relayed.",
       "RelayUserInactive": "That user is not connected.",
       "RelayUnavailable": "Your note could not be sent to a Game Master. Ask your GM to check the console log.",

@@ -18,6 +18,7 @@ import {
   runMigrationIfNeeded
 } from "./services/calendar-service.js";
 import { ensureFolder } from "./services/journal-service.js";
+import { ensurePrivateEntry, repairPrivateOwnership } from "./services/private-store-service.js";
 import { registerRelayHandlers } from "./services/note-service.js";
 import { isGM } from "./services/permission-service.js";
 import { clearStaleRelayFlags, registerRelay, verifyRelayAvailable } from "./services/relay-service.js";
@@ -62,6 +63,8 @@ Hooks.once("ready", async () => {
     try {
       await runMigrationIfNeeded();
       await ensureFolder();
+      await ensurePrivateEntry();
+      await repairPrivateOwnership();
       await initializeWorldTimeCheckpoint();
     } catch (error) {
       log("error", "Startup tasks failed", error);
