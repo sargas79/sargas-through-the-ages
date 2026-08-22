@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   appear and push the time controls down under the pointer between a GM deciding to
   click and the click landing.
 
+### Internal
+
+- First tests for the calendar service, over a small stub of the Foundry surface it
+  uses: the world-time checkpoint, the drift report, the refusal and discard paths
+  around concurrent time changes, and a regression test holding the line that a
+  combat round moves world time without moving the campaign date.
+
 ### Fixed
 
 - A GM could rewind the campaign a day by clicking `−1 day` when they meant `+1 day`,
