@@ -148,7 +148,7 @@ Each moon has:
 | Offset (days) | How far into its cycle the moon already is on Year 1, Month 1, Day 1. Use it to put several moons out of step. |
 | Phases | How many named phases the cycle is divided into: 2, 4 or 8. |
 | Show in the month grid | Draws a small phase disc in every day cell. Turn it off for moons that only matter occasionally. |
-| Visible to players | Hidden moons appear only for GMs, exactly like a hidden Age. |
+| Visible to players | Hidden moons are not drawn for players. See the note on moons under *What privacy means here*. |
 
 A phase is centred on its exact point in the cycle, so a moon reads as full on the
 day nearest the true midpoint rather than on the day after it. The configuration
@@ -257,9 +257,16 @@ configuration, the campaign date, Ages, events, or the timeline display mode.
 | Open the timeline | yes | when enabled by the GM |
 | Change the shared timeline mode | yes | no |
 
-Player note writes are relayed to a connected GM over the module socket and
-re-validated there, so a player can only ever act on their own note. If no GM is
-online the attempt is refused with a clear message rather than failing silently.
+Player note writes are relayed to a connected GM and re-validated there, so a
+player can only ever act on their own note. If no GM is online the attempt is
+refused with a clear message rather than failing silently.
+
+The relay carries a request as a flag on the requesting player's **own User
+document**, rather than as a socket message. Foundry lets a player update only
+their own user, so the GM's client learns who is asking from the document that
+changed rather than from a field inside the request — which a sending client
+would be free to write. Nothing in a request's payload is trusted; only the
+identity behind it is something the server vouched for.
 
 ---
 
@@ -267,22 +274,55 @@ online the attempt is refused with a clear message rather than failing silently.
 
 | Data | Location |
 |---|---|
-| Calendar structure, month lengths, current date, moons, Ages | world setting `through-the-ages.calendarData` |
-| Timeline events | world setting `through-the-ages.timelineEvents` |
+| Calendar structure, month lengths, current date, moons, player-visible Ages | world setting `through-the-ages.calendarData` |
+| Player-visible timeline events | world setting `through-the-ages.timelineEvents` |
+| Hidden Ages, GM-only timeline events | flags on the **Calendar (GM only)** journal entry, which nobody owns |
 | Note text | Journal Entry Pages in the **Calendar Notes** folder |
 | Note metadata (date key, author, visibility) | page flags under `flags.through-the-ages` |
 | Browsing position, filters | per-client, never shared |
+| In-flight player note writes | flags on the requesting player's own User document, cleared once handled |
 
 One Journal Entry exists per date, named with the canonical key, and holds one page
 per note:
 
 ```
 Calendar Notes
-└─ 0142-07-12
-   ├─ The caravan reaches Toloraria
-   ├─ Wrenn's private observation
-   └─ GM — Ashfen Roadhouse rumour
+├─ 0142-07-12
+│  ├─ The caravan reaches Toloraria
+│  ├─ Wrenn's private observation
+│  └─ GM — Ashfen Roadhouse rumour
+└─ Calendar (GM only)
 ```
+
+---
+
+## What privacy means here
+
+Foundry sends every **world setting** to every connected client. Anything kept in
+one is readable by any player who opens a console, whatever the interface chooses
+to show them. Document **ownership** is the rule Foundry actually enforces: a
+document a player has no ownership of is never sent to their client at all.
+
+So everything this module treats as secret is stored as a document, not a setting:
+
+- **Note bodies** are journal pages. A GM-only page grants nothing by default, an
+  author-private page grants ownership to its author alone.
+- **Hidden Ages** and **GM-only timeline events** live in the **Calendar (GM only)**
+  entry inside the notes folder, which nobody owns by default. Marking an Age hidden
+  or an event GM-only moves it there; revealing it moves it back into the world
+  setting. Before version 2.2 these were kept in world settings, where the marking
+  filtered them out of the interface but not out of the data.
+
+**Moons are the exception.** A moon's *Visible to players* switch keeps it out of
+the header, the day panel and the month grid, but the moon list is part of the
+calendar structure every client needs in order to draw a date, so a hidden moon's
+name and cycle are still in data a determined player can read. Treat it as a
+display control, not as a secret. Nothing else about a moon is private in the first
+place — its phase is a function of the date everyone already has.
+
+If a GM changes the **Calendar (GM only)** entry's permissions from the journal
+sidebar, *Repair notes folder* in the configuration window resets them, and the
+module also resets them on load.
 
 Month notes live in an entry named `0142-07-00`. Month and day numbers are used as
 identifiers, never the editable labels, so renaming a month never disturbs an existing

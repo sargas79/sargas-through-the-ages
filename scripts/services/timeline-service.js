@@ -1,12 +1,17 @@
 /**
  * Timeline events and display modes.
  *
- * Events are small, ordered, world-shared records, so they live in a world
- * setting rather than as documents. Only GMs write them; every client reads a
- * permission-filtered view.
+ * Events are small, ordered records held in two stores, chosen by visibility:
+ * player-visible ones in a world setting, GM-only ones in the GM-only journal
+ * entry. That split is not tidiness — a world setting is delivered in full to
+ * every client, so a GM-only event kept in one was readable by any player who
+ * looked, whatever the interface showed them.
+ *
+ * Only GMs write. Every client reads whatever it is entitled to receive, and
+ * then filters again on top.
  */
 
-import { log, rerenderModuleApps, t } from "../compat.js";
+import { log, rerenderModuleApps, sanitizeHTML, t } from "../compat.js";
 import {
   DEFAULT_COLOR,
   EVENT_SOURCE,
@@ -21,11 +26,24 @@ import { compareDateKeys, parseKey } from "./date-service.js";
 import { linkNoteToEvent, updateNotePage } from "./journal-service.js";
 import { migrateEvents } from "./migration-service.js";
 import { canManageEvents, canSetTimelineMode, canViewEvent, isGM } from "./permission-service.js";
+import { readPrivate, writePrivate } from "./private-store-service.js";
 import { validateEvent } from "./validation-service.js";
 
-/** All stored events, normalised and chronologically ordered. */
+/**
+ * All stored events this client can see, normalised and chronologically ordered.
+ *
+ * Player-visible events live in the world setting, which Foundry delivers to
+ * everyone. GM-only events live in the GM-only store, which it does not: a
+ * player's `readPrivate` returns null because the document never reaches them,
+ * so the list they assemble here simply has no GM-only events in it. That is
+ * the difference between this and the old arrangement, where every event was in
+ * the world setting and `getVisibleEvents` filtered a list the player already
+ * had in full.
+ */
 export function getEvents() {
-  return migrateEvents(game.settings.get(MODULE_ID, SETTINGS.TIMELINE_EVENTS));
+  const shared = game.settings.get(MODULE_ID, SETTINGS.TIMELINE_EVENTS);
+  const privateEvents = readPrivate()?.events ?? [];
+  return migrateEvents([...(Array.isArray(shared) ? shared : []), ...privateEvents]);
 }
 
 /** Events the given user is entitled to see. */
@@ -38,9 +56,23 @@ export function getEvent(eventId) {
   return getEvents().find(event => event.id === eventId) ?? null;
 }
 
+/**
+ * Persist the whole event list, routed by visibility. GM only.
+ *
+ * An event's visibility decides where it is stored, not merely how it is drawn,
+ * so changing one from GM-only to player-visible moves it between the two
+ * stores. Both are written on every save because an event can cross between
+ * them, and writing only the half that looks changed would leave the other
+ * holding a stale copy.
+ */
 async function writeEvents(events) {
   const normalized = migrateEvents(events);
-  await game.settings.set(MODULE_ID, SETTINGS.TIMELINE_EVENTS, normalized);
+  const shared = normalized.filter(event => event.visibility === VISIBILITY.PLAYERS);
+  const hidden = normalized.filter(event => event.visibility !== VISIBILITY.PLAYERS);
+
+  const existing = readPrivate();
+  await writePrivate({ ages: existing?.ages ?? [], events: hidden });
+  await game.settings.set(MODULE_ID, SETTINGS.TIMELINE_EVENTS, shared);
   return normalized;
 }
 
@@ -63,7 +95,10 @@ export async function createEvent(data) {
     id: foundry.utils.randomID(),
     dateKey: data.dateKey,
     title: String(data.title ?? "").trim(),
-    description: data.description ?? "",
+    // An event description is rendered as HTML on every client that may see the
+    // event. It reaches here from an imported file or from a promoted note, so
+    // it is filtered on the way in rather than trusted for having been typed.
+    description: sanitizeHTML(data.description ?? ""),
     visibility: data.visibility === VISIBILITY.PLAYERS ? VISIBILITY.PLAYERS : VISIBILITY.GM_ONLY,
     color: data.color || DEFAULT_COLOR,
     icon: data.icon || "fa-solid fa-scroll",
@@ -94,7 +129,12 @@ export async function replaceEvents(events) {
     return null;
   }
   for (const event of events) assertValid(event);
-  const written = await writeEvents(events);
+  // The whole list is out of an imported file, so every description is filtered
+  // before it is stored rather than only on its way to the screen.
+  const written = await writeEvents(events.map(event => ({
+    ...event,
+    description: sanitizeHTML(event.description ?? "")
+  })));
   log("debug", `Replaced timeline events with ${written.length} imported records`);
   return written;
 }
@@ -114,6 +154,9 @@ export async function updateEvent(eventId, changes) {
   const updated = {
     ...events[index],
     ...changes,
+    description: changes.description === undefined
+      ? events[index].description
+      : sanitizeHTML(changes.description),
     source: changes.source ?? events[index].source,
     id: eventId,
     updatedAt: new Date().toISOString()

@@ -198,8 +198,14 @@ export function validateAges(ages = []) {
     if (!Number.isInteger(Number(age?.startYear)) || Number(age.startYear) < LIMITS.YEAR_MIN) {
       errors.push(issue("ageStartYear", { name: age?.name ?? "", min: LIMITS.YEAR_MIN }));
     }
-    if (!Number.isInteger(Number(age?.durationYears)) || Number(age.durationYears) < LIMITS.AGE_DURATION_MIN) {
-      errors.push(issue("ageDuration", { name: age?.name ?? "", min: LIMITS.AGE_DURATION_MIN }));
+    if (!Number.isInteger(Number(age?.durationYears))
+      || Number(age.durationYears) < LIMITS.AGE_DURATION_MIN
+      || Number(age.durationYears) > LIMITS.AGE_DURATION_MAX) {
+      errors.push(issue("ageDuration", {
+        name: age?.name ?? "",
+        min: LIMITS.AGE_DURATION_MIN,
+        max: LIMITS.AGE_DURATION_MAX
+      }));
     }
   }
 
@@ -250,7 +256,16 @@ export function structuralChangeWarnings(proposed, usage, previous = null) {
 /** Validate a note payload before it is written to a journal page. */
 export function validateNote(note, calendar) {
   const errors = [];
-  if (!String(note?.title ?? "").trim()) errors.push(issue("noteTitleEmpty"));
+  const title = String(note?.title ?? "").trim();
+  if (!title) errors.push(issue("noteTitleEmpty"));
+  // Bounds, not taste: a relayed write carries whatever the requesting client
+  // sent, so this is the only place that stops one note filling the database.
+  if (title.length > LIMITS.NOTE_TITLE_MAX) {
+    errors.push(issue("noteTitleLength", { max: LIMITS.NOTE_TITLE_MAX, actual: title.length }));
+  }
+  if (String(note?.content ?? "").length > LIMITS.NOTE_CONTENT_MAX) {
+    errors.push(issue("noteContentLength", { max: LIMITS.NOTE_CONTENT_MAX }));
+  }
   if (![SCOPE.DAY, SCOPE.MONTH].includes(note?.scope)) errors.push(issue("noteScopeInvalid"));
   if (!Object.values(VISIBILITY).includes(note?.visibility)) errors.push(issue("noteVisibilityInvalid"));
 

@@ -150,12 +150,27 @@ export async function createNotePage({ dateKey, title, content, visibility, auth
   return page;
 }
 
+/**
+ * True when a page is one of ours: a note page inside the managed folder.
+ *
+ * Carrying the module's flags is not on its own enough to be a calendar note.
+ * A write path is reached with a uuid the caller chose, so the page it resolves
+ * to has to be confirmed as living where this module's notes live before it is
+ * edited or deleted.
+ */
+export function isManagedNotePage(page) {
+  if (!page || !readNoteFlags(page)) return false;
+  const folder = getFolder();
+  return !!folder && page.parent?.folder?.id === folder.id;
+}
+
 /** Apply an update to an existing note page. GM only. */
 export async function updateNotePage(pageUuid, { title, content, visibility }) {
   const page = await fromUuid(pageUuid);
   if (!page) throw new Error(t("TTA.Errors.NoteMissing"));
   const flags = readNoteFlags(page);
   if (!flags) throw new Error(t("TTA.Errors.NoteMissing"));
+  if (!isManagedNotePage(page)) throw new Error(t("TTA.Errors.NoteNotManaged"));
 
   const update = { _id: page.id };
   if (title !== undefined) update.name = title;
@@ -200,6 +215,7 @@ export async function linkNoteToEvent(pageUuid, eventId) {
 export async function deleteNotePage(pageUuid) {
   const page = await fromUuid(pageUuid);
   if (!page) return false;
+  if (!isManagedNotePage(page)) throw new Error(t("TTA.Errors.NoteNotManaged"));
   await page.parent.deleteEmbeddedDocuments("JournalEntryPage", [page.id]);
   return true;
 }

@@ -4,7 +4,7 @@
  */
 
 import { isDebug, log, rerenderModuleApps, t } from "../compat.js";
-import { MODULE_ID, SETTINGS } from "../constants.js";
+import { MODULE_ID, SETTINGS, VISIBILITY } from "../constants.js";
 import { findAgeForYear, visibleAges } from "./age-service.js";
 import {
   addDays,
@@ -21,13 +21,24 @@ import {
   yearWithAffixes
 } from "./date-service.js";
 import { describePhase, sortMoons, visibleMoons } from "./moon-service.js";
-import { migrateCalendarData, needsMigration } from "./migration-service.js";
+import { migrateCalendarData, migrateEvents, needsMigration } from "./migration-service.js";
 import { canChangeTime, canConfigureCalendar, isGM } from "./permission-service.js";
+import { ensurePrivateEntry, readPrivate, writePrivate } from "./private-store-service.js";
 
-/** The full stored payload, normalised through the migration service. */
+/**
+ * The full stored payload this client can see, normalised.
+ *
+ * The calendar structure itself is shared: players need the month names and
+ * lengths to read a date at all. Hidden Ages are not, so they live in the
+ * GM-only store and are merged back in here. A player's `readPrivate` returns
+ * null — the document does not reach them — so their payload simply has no
+ * hidden Ages in it, rather than having them and declining to draw them.
+ */
 export function getData() {
   const raw = game.settings.get(MODULE_ID, SETTINGS.CALENDAR_DATA);
-  return migrateCalendarData(raw);
+  const hidden = readPrivate()?.ages ?? [];
+  if (!hidden.length) return migrateCalendarData(raw);
+  return migrateCalendarData({ ...raw, ages: [...(raw?.ages ?? []), ...hidden] });
 }
 
 /** Just the calendar structure block. */
@@ -95,14 +106,34 @@ export function isConfigured() {
   return game.settings.get(MODULE_ID, SETTINGS.CONFIGURED) === true;
 }
 
-/** Persist the whole calendar payload. GM only. */
+/**
+ * Persist the whole calendar payload, routing hidden Ages away from the world
+ * setting. GM only.
+ *
+ * The store is created before the split rather than after it. `getData` merges
+ * only what it could read, so saving a payload that was assembled while the
+ * store was unreadable would write the hidden half away; making sure it exists
+ * first means the read and the write are looking at the same place.
+ */
 export async function saveData(data, { markConfigured = true } = {}) {
   if (!canConfigureCalendar()) {
     ui.notifications.warn(t("TTA.Errors.GMOnly"));
     return null;
   }
+
+  const store = await ensurePrivateEntry();
+  if (!store) {
+    log("error", "The GM-only calendar store could not be created; nothing was saved");
+    ui.notifications.error(t("TTA.Errors.PrivateStoreUnavailable"));
+    return null;
+  }
+
   const normalized = migrateCalendarData(data);
-  await game.settings.set(MODULE_ID, SETTINGS.CALENDAR_DATA, normalized);
+  const shared = normalized.ages.filter(age => age.playerVisible !== false);
+  const hidden = normalized.ages.filter(age => age.playerVisible === false);
+
+  await writePrivate({ ages: hidden, events: readPrivate()?.events ?? [] });
+  await game.settings.set(MODULE_ID, SETTINGS.CALENDAR_DATA, { ...normalized, ages: shared });
   await game.settings.set(MODULE_ID, SETTINGS.SCHEMA_VERSION, normalized.schemaVersion);
   if (markConfigured) await game.settings.set(MODULE_ID, SETTINGS.CONFIGURED, true);
   log("debug", "Calendar data saved", normalized);
@@ -136,7 +167,14 @@ export async function setCurrentDateTime(date, time) {
   if (!isValidDate(date, calendar)) log("warn", "Requested date was out of range and has been clamped", date, target);
 
   const targetTime = clampTime(time);
-  const updated = { ...data, calendar: { ...calendar, currentDate: target, currentTime: targetTime } };
+  // `data` came from `getData`, which merged the hidden Ages back in for a GM.
+  // Writing it whole would put them straight back into the world setting every
+  // client reads, so only the shared half goes back.
+  const updated = {
+    ...data,
+    ages: data.ages.filter(age => age.playerVisible !== false),
+    calendar: { ...calendar, currentDate: target, currentTime: targetTime }
+  };
   // Every campaign-date move passes through here, so this is the one place that
   // can answer "what moved the date, and who asked for it" after the fact. The
   // stack is only worth collecting when someone is actually reading the log.
@@ -371,16 +409,61 @@ export function formatMonth(year, month) {
   return t("TTA.Format.Month", { month: monthName(month, calendar), year: formatYear(year, calendar) });
 }
 
-/** Run the stored-data migration once, if needed. GM only; safe to call twice. */
+/**
+ * Run the stored-data migration once, if needed. GM only; safe to call twice.
+ *
+ * Schema 5 is the one that moves content rather than reshaping it: hidden Ages
+ * and GM-only events were in world settings, which every client receives, and
+ * are lifted out into the GM-only store. Until this runs they are still
+ * readable by anyone in the world, so it runs on the first GM to connect.
+ */
 export async function runMigrationIfNeeded() {
   if (!isGM()) return false;
   const raw = game.settings.get(MODULE_ID, SETTINGS.CALENDAR_DATA);
   if (!needsMigration(raw)) return false;
+
   const migrated = migrateCalendarData(raw);
-  await game.settings.set(MODULE_ID, SETTINGS.CALENDAR_DATA, migrated);
+  const sharedEvents = migrateEvents(game.settings.get(MODULE_ID, SETTINGS.TIMELINE_EVENTS));
+
+  const hiddenAges = migrated.ages.filter(age => age.playerVisible === false);
+  const hiddenEvents = sharedEvents.filter(event => event.visibility !== VISIBILITY.PLAYERS);
+
+  const store = await ensurePrivateEntry();
+  if (!store) {
+    log("error", "Could not create the GM-only store; the migration was not applied");
+    return false;
+  }
+
+  const existing = readPrivate() ?? { ages: [], events: [] };
+  await writePrivate({
+    // Anything already in the store stays: running the migration twice must not
+    // drop what the first run put there.
+    ages: mergeById(existing.ages, hiddenAges),
+    events: mergeById(existing.events, hiddenEvents)
+  });
+
+  await game.settings.set(MODULE_ID, SETTINGS.CALENDAR_DATA, {
+    ...migrated,
+    ages: migrated.ages.filter(age => age.playerVisible !== false)
+  });
+  await game.settings.set(
+    MODULE_ID,
+    SETTINGS.TIMELINE_EVENTS,
+    sharedEvents.filter(event => event.visibility === VISIBILITY.PLAYERS)
+  );
   await game.settings.set(MODULE_ID, SETTINGS.SCHEMA_VERSION, migrated.schemaVersion);
-  log("info", `Migrated calendar data to schema version ${migrated.schemaVersion}`);
+
+  log("info",
+    `Migrated calendar data to schema version ${migrated.schemaVersion}; moved `
+    + `${hiddenAges.length} hidden Ages and ${hiddenEvents.length} GM-only events out of world settings`);
   return true;
+}
+
+/** Combine two record lists on `id`, letting the second win. Order preserved. */
+function mergeById(first, second) {
+  const merged = new Map(first.map(record => [record.id, record]));
+  for (const record of second) merged.set(record.id, record);
+  return [...merged.values()];
 }
 
 /** Setting change handler: keep every open module window in sync. */

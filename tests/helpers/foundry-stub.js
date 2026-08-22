@@ -64,6 +64,7 @@ export function installFoundryStub({
   stub.game = {
     user: { isGM, name: isGM ? "Test GM" : "Test Player" },
     users: [],
+    modules: { get: () => null },
     i18n: {
       localize: key => key,
       format: key => key

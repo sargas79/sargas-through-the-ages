@@ -6,11 +6,16 @@
 
 export const MODULE_ID = "through-the-ages";
 export const MODULE_TITLE = "Through the Ages";
-export const SCHEMA_VERSION = 4;
-
-export const SOCKET_EVENT = `module.${MODULE_ID}`;
+export const SCHEMA_VERSION = 5;
 
 export const NOTES_FOLDER_NAME = "Calendar Notes";
+
+/**
+ * The GM-only entry inside the notes folder. It holds hidden Ages and GM-only
+ * timeline events, which used to sit in world settings where every client could
+ * read them. See `private-store-service.js`.
+ */
+export const PRIVATE_ENTRY_NAME = "Calendar (GM only)";
 
 /** World and client setting keys. */
 export const SETTINGS = {
@@ -30,7 +35,14 @@ export const SETTINGS = {
 /** Flag keys written under `flags.through-the-ages`. */
 export const FLAGS = {
   NOTE: "note",
-  ENTRY: "entry"
+  ENTRY: "entry",
+  /** Relay traffic, written on the requesting user's own User document. */
+  REQUESTS: "requests",
+  RESPONSES: "responses",
+  RELAY_PROBE: "relayProbe",
+  /** Marks the GM-only entry, and carries its payload. */
+  PRIVATE_ENTRY: "privateStore",
+  PRIVATE_DATA: "privateData"
 };
 
 /** Note visibility classifications. */
@@ -66,11 +78,21 @@ export const EVENT_SOURCE = {
   PROMOTED: "promoted"
 };
 
-/** Socket operations relayed to an active GM. */
-export const SOCKET_OPS = {
+/** Operations relayed to an active GM for execution. */
+export const RELAY_OPS = {
   CREATE_NOTE: "createNote",
   UPDATE_NOTE: "updateNote",
   DELETE_NOTE: "deleteNote"
+};
+
+/**
+ * Bounds on relayed traffic. Every relayed request is a document write made by
+ * the GM's client, so one player without a limit can keep it busy and fill the
+ * world database. Generous enough that ordinary note-taking never meets it.
+ */
+export const RELAY_LIMITS = {
+  WINDOW_MS: 60000,
+  MAX_PER_WINDOW: 30
 };
 
 /** Configuration bounds enforced by the validation service. */
@@ -83,6 +105,21 @@ export const LIMITS = {
   WEEKDAYS_MAX: 14,
   YEAR_MIN: 1,
   AGE_DURATION_MIN: 1,
+  /**
+   * Ages are drawn as a band and a row of ticks, and the timeline used to build
+   * one array entry per year to do it, so a duration of a few million years was
+   * enough to hang every client that opened the window. The rendering no longer
+   * scales with the span, but a duration this far past any published setting's
+   * history is a mistake or an attack rather than a campaign, and it is cheaper
+   * to refuse it than to reason about every consumer downstream.
+   */
+  AGE_DURATION_MAX: 100000,
+  /**
+   * Note bounds. A relayed write carries whatever the requesting client sent,
+   * so these are what stop one player filling the world database.
+   */
+  NOTE_TITLE_MAX: 200,
+  NOTE_CONTENT_MAX: 100000,
   MOONS_MAX: 12,
   MOON_CYCLE_MIN: 2,
   MOON_CYCLE_MAX: 1000,

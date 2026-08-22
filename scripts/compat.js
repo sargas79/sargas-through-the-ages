@@ -5,10 +5,136 @@
  */
 
 import { MODULE_ID, MODULE_TITLE, SETTINGS } from "./constants.js";
+import { isAllowedAttribute, isAllowedTag } from "./services/sanitize-service.js";
 
 /** Resolve the active TextEditor implementation. */
 function textEditor() {
   return foundry?.applications?.ux?.TextEditor?.implementation ?? globalThis.TextEditor;
+}
+
+const HTML_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+
+/**
+ * Escape a value for interpolation into markup.
+ *
+ * Foundry has its own helper, but this one is here so {@link html} stays a pure
+ * function that can be unit tested without a Foundry runtime, and so a missing
+ * global can never silently degrade into no escaping at all.
+ */
+export function escapeHTML(value) {
+  return String(value ?? "").replace(/[&<>"']/g, character => HTML_ESCAPES[character]);
+}
+
+/**
+ * Tagged template for building small fragments of markup, escaping every
+ * interpolated value.
+ *
+ * Dialog bodies are assembled as strings and handed to DialogV2, which renders
+ * them as HTML. Interpolating a note title or an imported month name into one
+ * directly puts author-controlled markup into the document, so every such site
+ * uses this tag: the escaping then comes from the syntax rather than from
+ * remembering to call for it.
+ *
+ * A value that is itself already-built markup — a list of `<li>` rows composed
+ * by an earlier `html` call — must be passed through {@link trustedHTML} to say
+ * so explicitly.
+ *
+ * @example html`<p>${note.title}</p>`
+ */
+export function html(strings, ...values) {
+  return strings.reduce((out, chunk, index) => {
+    if (index >= values.length) return out + chunk;
+    const value = values[index];
+    return out + chunk + (value instanceof TrustedHTML ? value.toString() : escapeHTML(value));
+  }, "");
+}
+
+/** Marker for a string that is already safe markup. See {@link trustedHTML}. */
+class TrustedHTML {
+  #value;
+
+  constructor(value) {
+    this.#value = String(value ?? "");
+  }
+
+  toString() {
+    return this.#value;
+  }
+}
+
+/**
+ * Mark an already-escaped fragment as safe to interpolate into {@link html}.
+ *
+ * Every call is a place where the escaping has been reasoned about once and
+ * asserted, so they are meant to be few and to stand out in review.
+ */
+export function trustedHTML(value) {
+  return new TrustedHTML(value);
+}
+
+/**
+ * Strip everything from stored markup that the sanitize policy does not allow.
+ *
+ * Parsing happens inside a `<template>`, whose content is inert: no script
+ * runs, no image loads and no handler fires while the tree is being walked, so
+ * a hostile body is defused before it is ever examined.
+ *
+ * A disallowed element is unwrapped rather than deleted — its text survives
+ * where its markup does not — except for the few whose content is code rather
+ * than prose, which are removed outright.
+ */
+export function sanitizeHTML(raw) {
+  const source = String(raw ?? "");
+  if (!source) return "";
+
+  // Foundry always runs in a browser, but the services are unit tested in Node,
+  // where there is no parser. Escaping is the safe way to fail: the body then
+  // reads as plain text instead of as markup.
+  if (typeof document === "undefined" || !document.createElement) return escapeHTML(source);
+
+  try {
+    const template = document.createElement("template");
+    template.innerHTML = source;
+    sanitizeNode(template.content);
+    return template.innerHTML;
+  } catch (error) {
+    log("error", "Failed to sanitize stored HTML; falling back to plain text", error);
+    return escapeHTML(source);
+  }
+}
+
+/** Elements whose text is not prose, and so are dropped whole rather than unwrapped. */
+const DROP_WHOLE = new Set(["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "LINK", "META", "TEMPLATE", "NOSCRIPT"]);
+
+/** Apply the policy to one parsed subtree, in place. */
+function sanitizeNode(root) {
+  // Children are copied before iterating because the walk replaces nodes as it
+  // goes, which would otherwise move the live collection underneath it.
+  for (const node of [...root.childNodes]) {
+    if (node.nodeType === 3 /* text */) continue;
+    if (node.nodeType !== 1 /* element */) {
+      node.remove();
+      continue;
+    }
+
+    if (DROP_WHOLE.has(node.tagName)) {
+      node.remove();
+      continue;
+    }
+
+    sanitizeNode(node);
+
+    if (!isAllowedTag(node.tagName)) {
+      node.replaceWith(...node.childNodes);
+      continue;
+    }
+
+    for (const attribute of [...node.attributes]) {
+      if (!isAllowedAttribute(node.tagName, attribute.name, attribute.value)) {
+        node.removeAttribute(attribute.name);
+      }
+    }
+  }
 }
 
 /** Render a Handlebars template by path. */
@@ -23,14 +149,22 @@ export function loadTemplates(paths) {
   return fn(paths);
 }
 
-/** Enrich stored HTML for display (links, rolls, secrets). */
-export async function enrichHTML(html, options = {}) {
-  if (!html) return "";
+/**
+ * Enrich stored HTML for display (links, rolls, secrets).
+ *
+ * Sanitizing happens here rather than only on the way in, for two reasons: a
+ * world upgrading to this version already holds bodies that were written before
+ * anything checked them, and enrichment legitimately produces markup of its own
+ * from plain text, so it has to run second or its output would be stripped.
+ */
+export async function enrichHTML(source, options = {}) {
+  if (!source) return "";
+  const safe = sanitizeHTML(source);
   try {
-    return await textEditor().enrichHTML(html, { secrets: false, ...options });
+    return await textEditor().enrichHTML(safe, { secrets: false, ...options });
   } catch (error) {
     log("error", "Failed to enrich HTML", error);
-    return foundry.utils.escapeHTML?.(String(html)) ?? "";
+    return safe;
   }
 }
 

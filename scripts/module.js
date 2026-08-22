@@ -4,7 +4,7 @@
  * Lifecycle:
  *   init  - settings, Handlebars helpers and partials, hook registration
  *   setup - public API
- *   ready - migration, journal folder verification, socket wiring
+ *   ready - migration, journal folder verification, relay wiring
  */
 
 import { buildApi } from "./api.js";
@@ -18,9 +18,10 @@ import {
   runMigrationIfNeeded
 } from "./services/calendar-service.js";
 import { ensureFolder } from "./services/journal-service.js";
-import { registerSocketHandlers } from "./services/note-service.js";
+import { ensurePrivateEntry, repairPrivateOwnership } from "./services/private-store-service.js";
+import { registerRelayHandlers } from "./services/note-service.js";
 import { isGM } from "./services/permission-service.js";
-import { registerSocket } from "./services/socket-service.js";
+import { clearStaleRelayFlags, registerRelay, verifyRelayAvailable } from "./services/relay-service.js";
 
 const TEMPLATE_ROOT = `modules/${MODULE_ID}/templates`;
 
@@ -55,19 +56,26 @@ Hooks.once("setup", () => {
 });
 
 Hooks.once("ready", async () => {
-  registerSocket();
+  registerRelay();
 
   if (isGM()) {
-    registerSocketHandlers();
+    registerRelayHandlers();
     try {
       await runMigrationIfNeeded();
       await ensureFolder();
+      await ensurePrivateEntry();
+      await repairPrivateOwnership();
       await initializeWorldTimeCheckpoint();
     } catch (error) {
       log("error", "Startup tasks failed", error);
       ui.notifications.error(game.i18n.localize("TTA.Errors.StartupFailed"));
     }
   }
+
+  // Housekeeping for this client's own leftovers, and one clear line in the log
+  // if the transport the relay depends on is not available to this user.
+  await clearStaleRelayFlags();
+  await verifyRelayAvailable();
 
   onCalendarDataChanged();
   log("info", `${MODULE_TITLE} ready`);

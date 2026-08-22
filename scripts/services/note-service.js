@@ -1,14 +1,18 @@
 /**
  * Calendar notes: the permission-aware layer between the UI and journal storage.
  *
- * A GM performs writes directly; a player's request is validated locally, sent
- * to a GM over the socket, re-validated there against the requesting user, and
- * only then written. Reads are filtered so hidden note content never reaches a
- * client that is not entitled to it.
+ * A GM performs writes directly; a player's request is validated locally,
+ * relayed to a GM through the requesting user's own document, re-validated
+ * there against the authenticated requester, and only then written. Reads are
+ * filtered so hidden note content never reaches a client that is not entitled
+ * to it.
+ *
+ * The relay's identity guarantee is the whole reason the handlers below can
+ * trust their `user` argument; see `relay-service.js` for what it rests on.
  */
 
-import { log, t } from "../compat.js";
-import { MODULE_ID, SCOPE, SOCKET_OPS, VISIBILITY } from "../constants.js";
+import { log, sanitizeHTML, t } from "../compat.js";
+import { MODULE_ID, RELAY_OPS, SCOPE, VISIBILITY } from "../constants.js";
 import { getCalendar } from "./calendar-service.js";
 import { compareDateKeys, dayKey, monthKey, parseKey } from "./date-service.js";
 import * as journal from "./journal-service.js";
@@ -19,7 +23,7 @@ import {
   canViewNote,
   isGM
 } from "./permission-service.js";
-import { registerHandler, request } from "./socket-service.js";
+import { registerHandler, request } from "./relay-service.js";
 import { validateNote } from "./validation-service.js";
 
 /** Default visibility for a note authored by the given user. */
@@ -166,7 +170,7 @@ export async function createNote({ dateKey, title, content = "", visibility } = 
   assertValid(payload);
 
   if (isGM()) return journal.createNotePage(payload);
-  return request(SOCKET_OPS.CREATE_NOTE, payload);
+  return request(RELAY_OPS.CREATE_NOTE, payload);
 }
 
 /** Update a note. Players may only update their own, and never its visibility. */
@@ -197,7 +201,7 @@ export async function updateNote(pageUuid, { title, content, visibility } = {}) 
   });
 
   if (isGM()) return journal.updateNotePage(pageUuid, payload);
-  return request(SOCKET_OPS.UPDATE_NOTE, payload);
+  return request(RELAY_OPS.UPDATE_NOTE, payload);
 }
 
 /** Delete a note. Callers are expected to have confirmed with the user first. */
@@ -213,7 +217,7 @@ export async function deleteNote(pageUuid) {
     return false;
   }
   if (isGM()) return journal.deleteNotePage(pageUuid);
-  return request(SOCKET_OPS.DELETE_NOTE, { pageUuid });
+  return request(RELAY_OPS.DELETE_NOTE, { pageUuid });
 }
 
 /** Notes eligible for promotion into a timeline event: day notes, not yet promoted. */
@@ -225,17 +229,42 @@ export function getPromotableNotes() {
 }
 
 /**
- * GM-side socket handlers. Each one re-validates the request against the user
- * who sent it, so a crafted socket message cannot forge authorship or escalate
- * a note's visibility.
+ * Refuse a relayed request from a user who should not be making one.
+ *
+ * The relay authenticates who is asking — `user` is the document whose own
+ * flags carried the request — so this is no longer the load-bearing check it
+ * was when identity was a claim in a socket message. It stays because both
+ * cases still describe a request that cannot be genuine: a GM writes directly
+ * and never relays, and a disconnected user is not at a keyboard asking for
+ * anything.
  */
-export function registerSocketHandlers() {
-  registerHandler(SOCKET_OPS.CREATE_NOTE, async (payload, user) => {
+function assertRelayable(user) {
+  if (!user) throw new Error("Unknown requesting user");
+  if (isGM(user)) throw new Error(t("TTA.Errors.RelayNotForGM"));
+  if (!user.active) throw new Error(t("TTA.Errors.RelayUserInactive"));
+}
+
+/**
+ * GM-side relay handlers.
+ *
+ * Each one re-validates the request against the authenticated requester and
+ * sanitizes the body before it is stored. The payload is still written entirely
+ * by the requesting client and is trusted for nothing; only the identity of the
+ * user who sent it is now something the server vouched for.
+ */
+
+export function registerRelayHandlers() {
+  registerHandler(RELAY_OPS.CREATE_NOTE, async (payload, user) => {
+    assertRelayable(user);
     if (!canCreateNote(payload.scope, user)) throw new Error(t("TTA.Errors.NoteCreationDenied"));
     const safe = {
       dateKey: payload.dateKey,
       title: String(payload.title ?? "").trim(),
-      content: payload.content ?? "",
+      // The body is stored as HTML and rendered back on every client, and this
+      // one did not come from the editor: it is whatever string the requesting
+      // client sent. It is filtered here, before it is written, so a world is
+      // not carrying markup that only the render path knows to defuse.
+      content: sanitizeHTML(payload.content ?? ""),
       scope: payload.scope,
       visibility: VISIBILITY.AUTHOR_AND_GM,
       authorId: user.id,
@@ -247,20 +276,32 @@ export function registerSocketHandlers() {
     return page?.uuid ?? null;
   });
 
-  registerHandler(SOCKET_OPS.UPDATE_NOTE, async (payload, user) => {
+  registerHandler(RELAY_OPS.UPDATE_NOTE, async (payload, user) => {
+    assertRelayable(user);
     const page = await fromUuid(payload.pageUuid);
     const flags = journal.readNoteFlags(page);
     if (!flags) throw new Error(t("TTA.Errors.NoteMissing"));
     if (!canEditNote(flags, user)) throw new Error(t("TTA.Errors.NoteEditDenied"));
-    // A relayed request may never change visibility: only a GM acting directly can.
-    await journal.updateNotePage(payload.pageUuid, {
-      title: payload.title,
-      content: payload.content
+
+    const content = payload.content === undefined ? undefined : sanitizeHTML(payload.content);
+
+    // The create handler has always validated its payload and this one never
+    // did, so a relayed edit was the way round every bound the module sets.
+    assertValid({
+      dateKey: flags.dateKey,
+      scope: flags.scope,
+      title: payload.title ?? page.name,
+      content: content ?? "",
+      visibility: flags.visibility
     });
+
+    // A relayed request may never change visibility: only a GM acting directly can.
+    await journal.updateNotePage(payload.pageUuid, { title: payload.title, content });
     return true;
   });
 
-  registerHandler(SOCKET_OPS.DELETE_NOTE, async (payload, user) => {
+  registerHandler(RELAY_OPS.DELETE_NOTE, async (payload, user) => {
+    assertRelayable(user);
     const page = await fromUuid(payload.pageUuid);
     const flags = journal.readNoteFlags(page);
     if (!flags) throw new Error(t("TTA.Errors.NoteMissing"));
@@ -268,5 +309,5 @@ export function registerSocketHandlers() {
     return journal.deleteNotePage(payload.pageUuid);
   });
 
-  log("debug", `${MODULE_ID} note socket handlers registered`);
+  log("debug", `${MODULE_ID} note relay handlers registered`);
 }

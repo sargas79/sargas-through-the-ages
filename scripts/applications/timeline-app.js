@@ -6,9 +6,9 @@
  * control in this window changes the shared campaign date.
  */
 
-import { confirmDialog, enrichHTML, log, promptForm, renderTemplate, t } from "../compat.js";
+import { confirmDialog, enrichHTML, html, log, promptForm, renderTemplate, t, trustedHTML } from "../compat.js";
 import { MODULE_ID, TIMELINE_MODE, VISIBILITY } from "../constants.js";
-import { endYear, yearsInAge } from "../services/age-service.js";
+import { ageLength, endYear } from "../services/age-service.js";
 import {
   formatDate,
   formatMonth,
@@ -35,6 +35,12 @@ import {
 import { EventEditorApp } from "./event-editor-app.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
+
+/** Years between regular ticks on the spine while the span is short enough. */
+const TICK_INTERVAL = 5;
+
+/** The most regular ticks the spine draws, whatever the span. */
+const TICK_BUDGET = 40;
 
 export class TimelineApp extends HandlebarsApplicationMixin(ApplicationV2) {
   constructor(options = {}) {
@@ -104,7 +110,11 @@ export class TimelineApp extends HandlebarsApplicationMixin(ApplicationV2) {
       years = [this.viewYear];
     } else if (age) {
       events = getEventsForAge(age);
-      years = yearsInAge(age);
+      // Deliberately not every year the Age covers. The grouping below adds a
+      // year as soon as an event falls in it, and the filter drops the years
+      // that stay empty, so listing the span up front only built groups to
+      // throw away — one per year, on every render, for the whole Age.
+      years = [];
     } else {
       events = getEventsForYear(this.viewYear);
       years = [this.viewYear];
@@ -138,7 +148,7 @@ export class TimelineApp extends HandlebarsApplicationMixin(ApplicationV2) {
       isExpanded: mode === TIMELINE_MODE.EXPANDED,
       isYearMode: mode === TIMELINE_MODE.YEAR,
       isMonthMode: mode === TIMELINE_MODE.MONTH,
-      age: age ? { ...age, endYear: endYear(age), yearCount: yearsInAge(age).length } : null,
+      age: age ? { ...age, endYear: endYear(age), yearCount: ageLength(age) } : null,
       hasAge: !!age,
       ages: getVisibleAges().map(a => ({ ...a, endYear: endYear(a), isCurrent: a.id === getCurrentAge()?.id })),
       viewYear: this.viewYear,
@@ -170,7 +180,7 @@ export class TimelineApp extends HandlebarsApplicationMixin(ApplicationV2) {
       color: age.color,
       startYear: Number(age.startYear),
       endYear: endYear(age),
-      yearCount: yearsInAge(age).length,
+      yearCount: ageLength(age),
       flex: Math.max(Number(age.durationYears) / span, 0.14).toFixed(4),
       isCurrent: age.id === currentId,
       isViewed: age.id === viewAge?.id
@@ -226,19 +236,31 @@ export class TimelineApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const years = new Set(events.map(event => parseKey(event.dateKey)?.year));
     const start = Number(age.startYear);
     const last = endYear(age);
-    const span = yearsInAge(age).length || 1;
-    for (let year = start; year <= last; year++) {
+    const span = ageLength(age) || 1;
+
+    // Regular ticks every fifth year while that stays legible, then spaced out
+    // so their number is bounded however long the Age is. A span of thousands
+    // of years used to draw a tick per year: unreadable, and built by a loop
+    // whose length was the Age's duration.
+    const step = Math.max(TICK_INTERVAL, Math.ceil(span / TICK_BUDGET));
+
+    const marked = new Set();
+    for (let year = start; year <= last; year += step) marked.add(year);
+    for (const year of years) {
+      if (Number.isInteger(year) && year >= start && year <= last) marked.add(year);
+    }
+    if (current.year >= start && current.year <= last) marked.add(current.year);
+
+    return [...marked].sort((a, b) => a - b).map(year => {
       const hasEvent = years.has(year);
       const isCurrent = year === current.year;
-      if (!(isCurrent || hasEvent || (year - start) % 5 === 0)) continue;
-      ticks.push({
+      return {
         position: (((year - start + 0.5) / span) * 100).toFixed(3),
         label: (isCurrent || hasEvent || year % 20 === 0) ? year : "",
         hasEvent,
         isCurrent
-      });
-    }
-    return ticks;
+      };
+    });
   }
 
   /** What the toolbar names as the browsed scope, per mode. */
@@ -441,16 +463,15 @@ export class TimelineApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const notes = getPromotableNotes();
     if (!notes.length) return ui.notifications.info(t("TTA.Timeline.NoPromotableNotes"));
 
-    const options = notes.map(note => {
-      const label = `${note.dateKey} — ${note.title} (${note.authorName})`;
-      return `<option value="${note.uuid}">${foundry.utils.escapeHTML(label)}</option>`;
-    }).join("");
+    const options = notes
+      .map(note => html`<option value="${note.uuid}">${`${note.dateKey} — ${note.title} (${note.authorName})`}</option>`)
+      .join("");
 
     const result = await promptForm({
       title: t("TTA.Timeline.FromNoteTitle"),
-      content: `<div class="tta-prompt">
+      content: html`<div class="tta-prompt">
         <label for="tta-promote-note">${t("TTA.Timeline.FromNoteLabel")}</label>
-        <select id="tta-promote-note" name="uuid">${options}</select>
+        <select id="tta-promote-note" name="uuid">${trustedHTML(options)}</select>
       </div>`,
       okLabel: t("TTA.Timeline.FromNote")
     });
@@ -475,7 +496,7 @@ export class TimelineApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
     const confirmed = await confirmDialog({
       title: t("TTA.Timeline.DeleteTitle"),
-      content: `<p>${t("TTA.Timeline.DeleteBody", { title: record.title })}</p>`,
+      content: html`<p>${t("TTA.Timeline.DeleteBody", { title: record.title })}</p>`,
       yesLabel: t("TTA.Common.Delete"),
       yesIcon: "fa-solid fa-trash"
     });

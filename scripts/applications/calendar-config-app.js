@@ -7,7 +7,7 @@
  * could strand existing notes or events require an explicit confirmation.
  */
 
-import { confirmDialog, log, randomID, t } from "../compat.js";
+import { confirmDialog, html, log, randomID, t, trustedHTML } from "../compat.js";
 import {
   DEFAULT_COLOR,
   DEFAULT_MONTH_NAMES,
@@ -27,6 +27,7 @@ import * as note from "../services/note-service.js";
 import { migrateCalendarData, resizeMonthLengths, resizeNames } from "../services/migration-service.js";
 import { clampCycleLength, describePhase, sortMoons } from "../services/moon-service.js";
 import { canConfigureCalendar } from "../services/permission-service.js";
+import * as privateStore from "../services/private-store-service.js";
 import * as portability from "../services/portability-service.js";
 import * as presets from "../services/preset-service.js";
 import * as timeline from "../services/timeline-service.js";
@@ -359,8 +360,8 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
     const eventCount = timeline.countEventsInAgeRange(age);
     const confirmed = await confirmDialog({
       title: t("TTA.Config.RemoveAgeTitle"),
-      content: `<p>${t("TTA.Config.RemoveAgeBody", { name: age.name })}</p>`
-        + (eventCount ? `<p class="notification warning">${t("TTA.Config.RemoveAgeEvents", { count: eventCount })}</p>` : "")
+      content: html`<p>${t("TTA.Config.RemoveAgeBody", { name: age.name })}</p>`
+        + (eventCount ? html`<p class="notification warning">${t("TTA.Config.RemoveAgeEvents", { count: eventCount })}</p>` : "")
     });
     if (!confirmed) return;
 
@@ -423,7 +424,7 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
 
     const confirmed = await confirmDialog({
       title: t("TTA.Moons.RemoveTitle"),
-      content: `<p>${t("TTA.Moons.RemoveBody", { name: moon.name })}</p>`,
+      content: html`<p>${t("TTA.Moons.RemoveBody", { name: moon.name })}</p>`,
       yesLabel: t("TTA.Common.Remove"),
       yesIcon: "fa-solid fa-trash"
     });
@@ -488,14 +489,14 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
       t("TTA.Import.RowAges", summary.ages),
       t("TTA.Presets.RowHolidays", { count: holidays.length })
     ];
-    const caveats = (preset.caveats ?? []).map(key => `<li>${t(key)}</li>`).join("");
+    const caveats = (preset.caveats ?? []).map(key => html`<li>${t(key)}</li>`).join("");
 
     const confirmed = await confirmDialog({
       title: t("TTA.Presets.ConfirmTitle"),
-      content: `<p>${t("TTA.Presets.ConfirmBody", { name: t(keys.label) })}</p>`
-        + `<ul>${rows.map(row => `<li>${row}</li>`).join("")}</ul>`
-        + (caveats ? `<p class="notification warning">${t("TTA.Presets.CaveatsHeading")}</p><ul>${caveats}</ul>` : "")
-        + `<p>${t("TTA.Import.ReviewHint")}</p>`,
+      content: html`<p>${t("TTA.Presets.ConfirmBody", { name: t(keys.label) })}</p>`
+        + html`<ul>${trustedHTML(rows.map(row => html`<li>${row}</li>`).join(""))}</ul>`
+        + (caveats ? html`<p class="notification warning">${t("TTA.Presets.CaveatsHeading")}</p><ul>${trustedHTML(caveats)}</ul>` : "")
+        + html`<p>${t("TTA.Import.ReviewHint")}</p>`,
       yesLabel: t("TTA.Presets.Load")
     });
     if (!confirmed) return;
@@ -574,16 +575,21 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
     ];
     if (summary.events !== null) rows.push(t("TTA.Import.RowEvents", { count: summary.events }));
 
+    // Every string below is out of the imported file: the validation messages
+    // quote the month, moon and Age names it supplied, and `file.name` is the
+    // name it was saved under. This dialog is shown before the GM has accepted
+    // anything, so it is the first place a hostile file gets to put markup on
+    // screen, and the last place that should be building it by concatenation.
     const problems = [...parsed.errors, ...parsed.warnings]
-      .map(entry => `<li>${t(`TTA.Validation.${entry.code}`, entry.data)}</li>`)
+      .map(entry => html`<li>${t(`TTA.Validation.${entry.code}`, entry.data)}</li>`)
       .join("");
 
     const confirmed = await confirmDialog({
       title: t("TTA.Import.ConfirmTitle"),
-      content: `<p>${t("TTA.Import.ConfirmBody", { name: file.name })}</p>`
-        + `<ul>${rows.map(row => `<li>${row}</li>`).join("")}</ul>`
-        + (problems ? `<p class="notification warning">${t("TTA.Import.ProblemsHeading")}</p><ul>${problems}</ul>` : "")
-        + `<p>${t("TTA.Import.ReviewHint")}</p>`,
+      content: html`<p>${t("TTA.Import.ConfirmBody", { name: file.name })}</p>`
+        + html`<ul>${trustedHTML(rows.map(row => html`<li>${row}</li>`).join(""))}</ul>`
+        + (problems ? html`<p class="notification warning">${t("TTA.Import.ProblemsHeading")}</p><ul>${trustedHTML(problems)}</ul>` : "")
+        + html`<p>${t("TTA.Import.ReviewHint")}</p>`,
       yesLabel: t("TTA.Import.Load")
     });
     if (!confirmed) return;
@@ -645,6 +651,9 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
       ui.notifications.warn(t("TTA.Errors.GMOnly"));
       return;
     }
+    // The GM-only store is an ordinary-looking journal entry in the sidebar, so
+    // its permissions can be changed there by accident. Repair resets them.
+    await privateStore.repairPrivateOwnership();
     ui.notifications.info(t("TTA.Notifications.FolderRepaired", { count: result.repaired }));
     this.render();
   }
@@ -685,10 +694,10 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
     }
 
     if (warnings.length) {
-      const list = warnings.map(warning => `<li>${t(`TTA.Validation.${warning.code}`, warning.data)}</li>`).join("");
+      const list = warnings.map(warning => html`<li>${t(`TTA.Validation.${warning.code}`, warning.data)}</li>`).join("");
       const confirmed = await confirmDialog({
         title: t("TTA.Config.ConfirmChangesTitle"),
-        content: `<p>${t("TTA.Config.ConfirmChangesBody")}</p><ul>${list}</ul>`,
+        content: html`<p>${t("TTA.Config.ConfirmChangesBody")}</p><ul>${trustedHTML(list)}</ul>`,
         yesLabel: t("TTA.Config.ApplyAnyway")
       });
       if (!confirmed) return;

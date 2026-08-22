@@ -31,18 +31,30 @@ jobs:
           tag="${GITHUB_REF_NAME}"
           echo "value=${tag#[vV]}" >> "$GITHUB_OUTPUT"
 
+      # The tag name reaches this job as data and a git tag may contain quotes,
+      # `$` and backticks, so it is passed through the environment and read as a
+      # variable. Interpolating `${{ … }}` into the script body would let the
+      # name that triggered the run become part of the program it runs, with a
+      # write-scoped token in reach.
       - name: Set release manifest metadata
+        env:
+          TTA_VERSION: ${{ steps.version.outputs.value }}
+          TTA_REPOSITORY: ${{ github.repository }}
+          TTA_REF_NAME: ${{ github.ref_name }}
         run: |
-          node -e "
-            const fs = require('fs');
-            const manifest = JSON.parse(fs.readFileSync('module.json', 'utf8'));
-            manifest.version = '${{ steps.version.outputs.value }}';
-            manifest.download = 'https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/module.zip';
-            fs.writeFileSync('module.json', JSON.stringify(manifest, null, 2) + '\n');
-          "
+          node -e '
+            const fs = require("fs");
+            const manifest = JSON.parse(fs.readFileSync("module.json", "utf8"));
+            manifest.version = process.env.TTA_VERSION;
+            manifest.download = `https://github.com/${process.env.TTA_REPOSITORY}`
+              + `/releases/download/${process.env.TTA_REF_NAME}/module.zip`;
+            fs.writeFileSync("module.json", JSON.stringify(manifest, null, 2) + "\n");
+          '
 
       - name: Reconcile the changelog with the tag
-        run: node .github/scripts/release-changelog.mjs "${{ steps.version.outputs.value }}" release-notes.md
+        env:
+          TTA_VERSION: ${{ steps.version.outputs.value }}
+        run: node .github/scripts/release-changelog.mjs "$TTA_VERSION" release-notes.md
 
       - name: Build the package
         run: |
