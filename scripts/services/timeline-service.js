@@ -6,7 +6,7 @@
  * permission-filtered view.
  */
 
-import { log, rerenderModuleApps, t } from "../compat.js";
+import { log, rerenderModuleApps, sanitizeHTML, t } from "../compat.js";
 import {
   DEFAULT_COLOR,
   EVENT_SOURCE,
@@ -63,7 +63,10 @@ export async function createEvent(data) {
     id: foundry.utils.randomID(),
     dateKey: data.dateKey,
     title: String(data.title ?? "").trim(),
-    description: data.description ?? "",
+    // An event description is rendered as HTML on every client that may see the
+    // event. It reaches here from an imported file or from a promoted note, so
+    // it is filtered on the way in rather than trusted for having been typed.
+    description: sanitizeHTML(data.description ?? ""),
     visibility: data.visibility === VISIBILITY.PLAYERS ? VISIBILITY.PLAYERS : VISIBILITY.GM_ONLY,
     color: data.color || DEFAULT_COLOR,
     icon: data.icon || "fa-solid fa-scroll",
@@ -94,7 +97,12 @@ export async function replaceEvents(events) {
     return null;
   }
   for (const event of events) assertValid(event);
-  const written = await writeEvents(events);
+  // The whole list is out of an imported file, so every description is filtered
+  // before it is stored rather than only on its way to the screen.
+  const written = await writeEvents(events.map(event => ({
+    ...event,
+    description: sanitizeHTML(event.description ?? "")
+  })));
   log("debug", `Replaced timeline events with ${written.length} imported records`);
   return written;
 }
@@ -114,6 +122,9 @@ export async function updateEvent(eventId, changes) {
   const updated = {
     ...events[index],
     ...changes,
+    description: changes.description === undefined
+      ? events[index].description
+      : sanitizeHTML(changes.description),
     source: changes.source ?? events[index].source,
     id: eventId,
     updatedAt: new Date().toISOString()

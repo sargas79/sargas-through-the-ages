@@ -410,6 +410,8 @@
       "NoteNotManaged": "That page is not a calendar note.",
       "RelayNotForGM": "A Game Master's writes are never relayed.",
       "RelayUserInactive": "That user is not connected.",
+      "RelayUnavailable": "Your note could not be sent to a Game Master. Ask your GM to check the console log.",
+      "RelayRateLimited": "Too many note changes at once. Wait a moment and try again.",
       "NoteSaveFailed": "The note could not be saved.",
       "PromoteDayOnly": "Only day notes can become timeline events.",
       "PromoteGMOnly": "Only a Game Master can promote a note.",

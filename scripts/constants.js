@@ -8,8 +8,6 @@ export const MODULE_ID = "through-the-ages";
 export const MODULE_TITLE = "Through the Ages";
 export const SCHEMA_VERSION = 4;
 
-export const SOCKET_EVENT = `module.${MODULE_ID}`;
-
 export const NOTES_FOLDER_NAME = "Calendar Notes";
 
 /** World and client setting keys. */
@@ -30,7 +28,11 @@ export const SETTINGS = {
 /** Flag keys written under `flags.through-the-ages`. */
 export const FLAGS = {
   NOTE: "note",
-  ENTRY: "entry"
+  ENTRY: "entry",
+  /** Relay traffic, written on the requesting user's own User document. */
+  REQUESTS: "requests",
+  RESPONSES: "responses",
+  RELAY_PROBE: "relayProbe"
 };
 
 /** Note visibility classifications. */
@@ -66,11 +68,21 @@ export const EVENT_SOURCE = {
   PROMOTED: "promoted"
 };
 
-/** Socket operations relayed to an active GM. */
-export const SOCKET_OPS = {
+/** Operations relayed to an active GM for execution. */
+export const RELAY_OPS = {
   CREATE_NOTE: "createNote",
   UPDATE_NOTE: "updateNote",
   DELETE_NOTE: "deleteNote"
+};
+
+/**
+ * Bounds on relayed traffic. Every relayed request is a document write made by
+ * the GM's client, so one player without a limit can keep it busy and fill the
+ * world database. Generous enough that ordinary note-taking never meets it.
+ */
+export const RELAY_LIMITS = {
+  WINDOW_MS: 60000,
+  MAX_PER_WINDOW: 30
 };
 
 /** Configuration bounds enforced by the validation service. */

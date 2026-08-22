@@ -257,9 +257,16 @@ configuration, the campaign date, Ages, events, or the timeline display mode.
 | Open the timeline | yes | when enabled by the GM |
 | Change the shared timeline mode | yes | no |
 
-Player note writes are relayed to a connected GM over the module socket and
-re-validated there, so a player can only ever act on their own note. If no GM is
-online the attempt is refused with a clear message rather than failing silently.
+Player note writes are relayed to a connected GM and re-validated there, so a
+player can only ever act on their own note. If no GM is online the attempt is
+refused with a clear message rather than failing silently.
+
+The relay carries a request as a flag on the requesting player's **own User
+document**, rather than as a socket message. Foundry lets a player update only
+their own user, so the GM's client learns who is asking from the document that
+changed rather than from a field inside the request — which a sending client
+would be free to write. Nothing in a request's payload is trusted; only the
+identity behind it is something the server vouched for.
 
 ---
 
@@ -272,6 +279,7 @@ online the attempt is refused with a clear message rather than failing silently.
 | Note text | Journal Entry Pages in the **Calendar Notes** folder |
 | Note metadata (date key, author, visibility) | page flags under `flags.through-the-ages` |
 | Browsing position, filters | per-client, never shared |
+| In-flight player note writes | flags on the requesting player's own User document, cleared once handled |
 
 One Journal Entry exists per date, named with the canonical key, and holds one page
 per note:
