@@ -6,6 +6,9 @@ import {
   acknowledgeWorldTime,
   advanceTime,
   advanceTo,
+  advanceToNextAdventureDay,
+  setCurrentDateTime,
+  TIME_CHANGE_REASON,
   getCurrentDate,
   getCurrentTime,
   initializeWorldTimeCheckpoint,
@@ -246,5 +249,64 @@ describe("two time changes at once", () => {
 
     assert.deepEqual(second.time, { hour: 10, minute: 0 });
     assert.equal(isWorldTimeOutOfSync(), false);
+  });
+});
+
+describe("the timeChanged payload", () => {
+  const timeChanged = () => stub.hooks.filter(hook => hook.name === `${MODULE_ID}.timeChanged`).map(hook => hook.args[0]);
+
+  it("carries the previous moment, the elapsed seconds and the reason for an advance", async () => {
+    setup({ worldTime: 0, checkpoint: 0 });
+
+    await advanceTime(3600);
+
+    const [payload] = timeChanged();
+    assert.deepEqual(payload.date, { year: 5, month: 3, day: 10 });
+    assert.deepEqual(payload.time, { hour: 9, minute: 0 });
+    assert.deepEqual(payload.previous, { date: { year: 5, month: 3, day: 10 }, time: { hour: 8, minute: 0 } });
+    assert.equal(payload.elapsedSeconds, 3600);
+    assert.equal(payload.reason, TIME_CHANGE_REASON.ADVANCE);
+  });
+
+  it("names the next adventure day as its own reason", async () => {
+    setup({ worldTime: 0, checkpoint: 0 });
+
+    await advanceToNextAdventureDay();
+
+    const [payload] = timeChanged();
+    assert.deepEqual(payload.time, { hour: 7, minute: 0 });
+    assert.deepEqual(payload.date, { year: 5, month: 3, day: 11 });
+    assert.equal(payload.elapsedSeconds, 23 * 3600);
+    assert.equal(payload.reason, TIME_CHANGE_REASON.NEXT_ADVENTURE_DAY);
+  });
+
+  it("reports a direct set as such, with negative elapsed seconds on a rewind", async () => {
+    setup({ worldTime: 0, checkpoint: 0 });
+
+    await setCurrentDateTime({ year: 5, month: 3, day: 9 }, { hour: 8, minute: 0 });
+
+    const [payload] = timeChanged();
+    assert.equal(payload.reason, TIME_CHANGE_REASON.SET);
+    assert.equal(payload.elapsedSeconds, -86400);
+    assert.deepEqual(payload.previous.date, { year: 5, month: 3, day: 10 });
+  });
+
+  it("lets a caller of advanceTo say why", async () => {
+    setup({ worldTime: 0, checkpoint: 0 });
+
+    await advanceTo({ year: 5, month: 3, day: 12 }, { hour: 8, minute: 0 }, { reason: TIME_CHANGE_REASON.ADVANCE });
+    await advanceTo({ year: 5, month: 3, day: 13 }, { hour: 8, minute: 0 });
+
+    const reasons = timeChanged().map(payload => payload.reason);
+    assert.deepEqual(reasons, [TIME_CHANGE_REASON.ADVANCE, TIME_CHANGE_REASON.SET]);
+  });
+
+  it("still emits dateChanged with the bare date", async () => {
+    setup({ worldTime: 0, checkpoint: 0 });
+
+    await advanceTime(86400);
+
+    const dateChanged = stub.hooks.find(hook => hook.name === `${MODULE_ID}.dateChanged`);
+    assert.deepEqual(dateChanged.args[0], { year: 5, month: 3, day: 11 });
   });
 });

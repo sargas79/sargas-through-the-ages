@@ -292,3 +292,75 @@ describe("the requesting client", () => {
     assert.equal(alice.getFlag(MODULE_ID, FLAGS.RESPONSES).unknown.result, "x");
   });
 });
+
+describe("createRelay for companion modules", () => {
+  it("namespaces traffic under the companion's own flags and ignores the other module's", async () => {
+    harness = installRelayWorld([GM, ALICE], "gm1");
+    const relayModule = await loadRelay();
+
+    const companion = relayModule.createRelay({ moduleId: "sargas-time-bomb" });
+    const seenByCompanion = [];
+    const seenByOwn = [];
+    companion.registerHandler("propose", async (payload, user) => { seenByCompanion.push({ user: user.id, payload }); return "ok"; });
+    relayModule.registerHandler("propose", async () => { seenByOwn.push(true); return "wrong"; });
+    companion.registerRelay();
+    relayModule.registerRelay();
+
+    const alice = harness.users.get("alice");
+    await alice.update({ "flags.sargas-time-bomb.requests.c1": { operation: "propose", payload: { delta: 1 } } }, "alice");
+
+    assert.equal(seenByCompanion.length, 1);
+    assert.equal(seenByCompanion[0].user, "alice");
+    assert.deepEqual(seenByCompanion[0].payload, { delta: 1 });
+    assert.equal(seenByOwn.length, 0, "Through the Ages' own relay never saw the companion's request");
+    assert.equal(alice.getFlag("sargas-time-bomb", "responses").c1.ok, true);
+    assert.equal(alice.getFlag("sargas-time-bomb", "responses").c1.result, "ok");
+    assert.equal(alice.getFlag("sargas-time-bomb", "requests")?.c1, undefined, "the request was cleared");
+    assert.equal(alice.getFlag(MODULE_ID, "responses"), undefined);
+  });
+
+  it("round-trips a request from the companion's player client", async () => {
+    harness = installRelayWorld([GM, ALICE], "alice");
+    const relayModule = await loadRelay();
+    const companion = relayModule.createRelay({ moduleId: "sargas-time-bomb", requestTimeoutMs: 1000 });
+    companion.registerHandler("propose", async payload => payload.delta * 2);
+    companion.registerRelay();
+
+    // Alice asks; the stub runs the GM's handler in-process because every hook
+    // listener fires here. isPrimaryGM is evaluated as the acting user, so
+    // switch to the GM for the execution step.
+    const asked = companion.request("propose", { delta: 21 });
+    harness.actAs("gm1");
+    const alice = harness.users.get("alice");
+    await alice.update({ "flags.sargas-time-bomb.touch": 1 }, "alice");
+    harness.actAs("alice");
+    await alice.update({ "flags.sargas-time-bomb.touch": 2 }, "alice");
+    assert.equal(await asked, 42);
+  });
+
+  it("shares the executor election with the host module", async () => {
+    harness = installRelayWorld([{ id: "gmB", name: "B", isGM: true }, { id: "gmA", name: "A", isGM: true }, ALICE], "gmA");
+    const relayModule = await loadRelay();
+    const companion = relayModule.createRelay({ moduleId: "other" });
+    assert.equal(companion.isPrimaryGM(), true);
+    assert.equal(relayModule.isPrimaryGM(), true);
+    harness.actAs("gmB");
+    assert.equal(companion.isPrimaryGM(), false);
+    assert.equal(relayModule.isPrimaryGM(), false);
+  });
+
+  it("returns the same relay for the same module id", async () => {
+    harness = installRelayWorld([GM], "gm1");
+    const relayModule = await loadRelay();
+    const a = relayModule.createRelay({ moduleId: "twice" });
+    const b = relayModule.createRelay({ moduleId: "twice", requestTimeoutMs: 1 });
+    assert.equal(a, b);
+    assert.notEqual(a, relayModule.createRelay({ moduleId: "other" }));
+  });
+
+  it("refuses to build without a module id", async () => {
+    harness = installRelayWorld([GM], "gm1");
+    const relayModule = await loadRelay();
+    assert.throws(() => relayModule.createRelay({}), /moduleId/);
+  });
+});

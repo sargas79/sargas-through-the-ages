@@ -5,6 +5,14 @@ on:
     tags:
       - "v*"
       - "V*"
+  # A manual run for an existing or new tag. Pushing a tag is still the normal
+  # path; this exists for environments whose git proxy does not forward tags.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release, e.g. v2.2.0 (created on this commit if missing)"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -14,6 +22,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # On manual dispatch: check out the tag if it exists, otherwise create it on
+      # the dispatched commit and push it. The tag name is data (see below), so it
+      # is read from the environment and validated before use.
+      - name: Ensure the tag exists and is checked out
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TTA_TAG: ${{ inputs.tag }}
+        run: |
+          case "$TTA_TAG" in [vV][0-9]*.[0-9]*.[0-9]*) ;; *) echo "::error::tag must look like vX.Y.Z (got $TTA_TAG)"; exit 1;; esac
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --tags origin "refs/tags/$TTA_TAG" >/dev/null 2>&1; then
+            git fetch origin "refs/tags/$TTA_TAG:refs/tags/$TTA_TAG"
+          else
+            git tag -a "$TTA_TAG" -m "Through the Ages ${TTA_TAG#[vV]}"
+            git push origin "refs/tags/$TTA_TAG"
+          fi
+          git checkout --quiet "$TTA_TAG"
 
       - uses: actions/setup-node@v4
         with:
@@ -27,9 +56,11 @@ jobs:
 
       - name: Derive version from tag
         id: version
+        env:
+          TTA_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          tag="${GITHUB_REF_NAME}"
-          echo "value=${tag#[vV]}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TTA_TAG}" >> "$GITHUB_OUTPUT"
+          echo "value=${TTA_TAG#[vV]}" >> "$GITHUB_OUTPUT"
 
       # The tag name reaches this job as data and a git tag may contain quotes,
       # `$` and backticks, so it is passed through the environment and read as a
@@ -40,7 +71,7 @@ jobs:
         env:
           TTA_VERSION: ${{ steps.version.outputs.value }}
           TTA_REPOSITORY: ${{ github.repository }}
-          TTA_REF_NAME: ${{ github.ref_name }}
+          TTA_REF_NAME: ${{ steps.version.outputs.tag }}
         run: |
           node -e '
             const fs = require("fs");
@@ -65,7 +96,8 @@ jobs:
       - name: Publish the release
         uses: softprops/action-gh-release@v2
         with:
-          name: Through the Ages ${{ github.ref_name }}
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Through the Ages ${{ steps.version.outputs.tag }}
           files: |
             module.json
             module.zip

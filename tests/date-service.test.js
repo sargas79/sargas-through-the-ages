@@ -17,6 +17,7 @@ import {
   clampDate,
   compareDateKeys,
   dayKey,
+  campaignSeconds,
   fromAbsoluteDay,
   isSameDay,
   isValidTime,
@@ -348,5 +349,25 @@ describe("yearWithAffixes", () => {
   it("returns null when the calendar sets neither", () => {
     assert.equal(yearWithAffixes(1495, {}), null);
     assert.equal(yearWithAffixes(1495, { yearPrefix: "  ", yearSuffix: "" }), null);
+  });
+});
+
+describe("campaignSeconds", () => {
+  it("counts whole days plus the clock, so two moments subtract to their distance", () => {
+    const a = campaignSeconds({ year: 1, month: 1, day: 1 }, { hour: 0, minute: 0 }, CAL);
+    const b = campaignSeconds({ year: 1, month: 1, day: 2 }, { hour: 1, minute: 30 }, CAL);
+    assert.equal(a, 0);
+    assert.equal(b - a, 86400 + 3600 + 1800);
+  });
+
+  it("agrees with addSeconds across a month boundary", () => {
+    const start = { date: { year: 1, month: 1, day: 30 }, time: { hour: 23, minute: 0 } };
+    const moved = addSeconds(start.date, start.time, 7200, CAL);
+    const delta = campaignSeconds(moved.date, moved.time, CAL) - campaignSeconds(start.date, start.time, CAL);
+    assert.equal(delta, 7200);
+  });
+
+  it("treats a missing time as midnight", () => {
+    assert.equal(campaignSeconds({ year: 1, month: 1, day: 2 }, undefined, CAL), 86400);
   });
 });

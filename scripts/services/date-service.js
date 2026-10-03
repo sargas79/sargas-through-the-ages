@@ -191,6 +191,16 @@ export function toAbsoluteDay(date, calendar) {
     + (date.day - 1);
 }
 
+/**
+ * The campaign clock as a single second count, for delta arithmetic between
+ * two moments of the same calendar. Minute precision, like the stored clock.
+ */
+export function campaignSeconds(date, time, calendar) {
+  return (toAbsoluteDay(date, calendar) * 86400)
+    + ((time?.hour ?? 0) * 3600)
+    + ((time?.minute ?? 0) * 60);
+}
+
 /** Inverse of {@link toAbsoluteDay}. Values below zero clamp to the first day. */
 export function fromAbsoluteDay(absoluteDay, calendar) {
   const lengths = monthLengths(calendar);
