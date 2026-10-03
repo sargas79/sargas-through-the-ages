@@ -58,6 +58,16 @@ describe("the calendarConfigured hook", () => {
     assert.equal(configured()[0].structureChanged, false);
   });
 
+  it("stays quiet for an Age-only save, which cannot change the structure", async () => {
+    const calendar = await loadCalendar();
+    await calendar.saveData(structuredClone(DEFAULT_CALENDAR_DATA));
+    hooks = [];
+
+    await calendar.saveAges([{ id: "a", name: "An Age", startYear: 1, durationYears: 10, playerVisible: true }]);
+
+    assert.equal(configured().length, 0);
+  });
+
   it("does not fire when the save is refused", async () => {
     harness = installJournalWorld({ isGM: false });
     globalThis.Hooks.callAll = (name, ...args) => hooks.push({ name, args });

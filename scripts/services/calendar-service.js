@@ -116,7 +116,7 @@ export function isConfigured() {
  * store was unreadable would write the hidden half away; making sure it exists
  * first means the read and the write are looking at the same place.
  */
-export async function saveData(data, { markConfigured = true } = {}) {
+export async function saveData(data, { markConfigured = true, announce = true } = {}) {
   if (!canConfigureCalendar()) {
     ui.notifications.warn(t("TTA.Errors.GMOnly"));
     return null;
@@ -142,13 +142,16 @@ export async function saveData(data, { markConfigured = true } = {}) {
 
   // One signal for "the calendar's shape may have changed", for modules that
   // store calendar dates and need to revalidate them. Fires only on the saving
-  // client, like `timeChanged`; configuration is rare and GM-only.
-  const next = structureOf(normalized.calendar);
-  Hooks.callAll(`${MODULE_ID}.calendarConfigured`, {
-    calendar: normalized.calendar,
-    previous,
-    structureChanged: !sameStructure(previous, next)
-  });
+  // client, like `timeChanged`; configuration is rare and GM-only. Age-only
+  // saves pass `announce: false` because they cannot change the structure.
+  if (announce) {
+    const next = structureOf(normalized.calendar);
+    Hooks.callAll(`${MODULE_ID}.calendarConfigured`, {
+      calendar: normalized.calendar,
+      previous,
+      structureChanged: !sameStructure(previous, next)
+    });
+  }
   return normalized;
 }
 
@@ -170,7 +173,7 @@ function sameStructure(a, b) {
 /** Replace the Age list without touching the calendar structure. GM only. */
 export async function saveAges(ages) {
   const data = getData();
-  return saveData({ ...data, ages }, { markConfigured: isConfigured() });
+  return saveData({ ...data, ages }, { markConfigured: isConfigured(), announce: false });
 }
 
 /**

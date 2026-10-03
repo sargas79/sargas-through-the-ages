@@ -90,6 +90,23 @@ export function createRelay({
   requestTimeoutMs = REQUEST_TIMEOUT_MS
 } = {}) {
   if (typeof moduleId !== "string" || !moduleId) throw new Error("createRelay needs a moduleId");
+  // One relay per module id. Two instances on the same flags would each execute
+  // every request and write competing responses, so a repeat call (a second
+  // call site, a hot reload) gets the instance that already exists.
+  const existing = instances.get(moduleId);
+  if (existing) {
+    log("debug", `createRelay: reusing the existing relay for ${moduleId}`);
+    return existing;
+  }
+  const instance = buildRelay({ moduleId, flags, limits, requestTimeoutMs });
+  instances.set(moduleId, instance);
+  return instance;
+}
+
+/** Relays by module id, so a module id maps to exactly one transport. */
+const instances = new Map();
+
+function buildRelay({ moduleId, flags, limits, requestTimeoutMs }) {
   const keys = {
     requests: flags.requests ?? FLAGS.REQUESTS,
     responses: flags.responses ?? FLAGS.RESPONSES,

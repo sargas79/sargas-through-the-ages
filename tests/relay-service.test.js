@@ -349,6 +349,15 @@ describe("createRelay for companion modules", () => {
     assert.equal(relayModule.isPrimaryGM(), false);
   });
 
+  it("returns the same relay for the same module id", async () => {
+    harness = installRelayWorld([GM], "gm1");
+    const relayModule = await loadRelay();
+    const a = relayModule.createRelay({ moduleId: "twice" });
+    const b = relayModule.createRelay({ moduleId: "twice", requestTimeoutMs: 1 });
+    assert.equal(a, b);
+    assert.notEqual(a, relayModule.createRelay({ moduleId: "other" }));
+  });
+
   it("refuses to build without a module id", async () => {
     harness = installRelayWorld([GM], "gm1");
     const relayModule = await loadRelay();

@@ -398,7 +398,7 @@ as a fast path.
 |---|---|---|
 | `through-the-ages.timeChanged` | `{ date, time, previous: { date, time }, elapsedSeconds, reason }` | The campaign date or time was set. `elapsedSeconds` is signed (negative on a rewind). `reason` is one of `api.TIME_CHANGE_REASON`: `"advance"` (the header controls, `advanceTime`, `advanceDays`), `"nextAdventureDay"`, or `"set"` (the date picker, `setCurrentDateTime`, a bare `advanceTo`). |
 | `through-the-ages.dateChanged` | `date` | Same moment, date only. Kept for older listeners. |
-| `through-the-ages.calendarConfigured` | `{ calendar, previous: { monthsPerYear, monthLengths, monthNames }, structureChanged }` | The calendar structure was saved (configuration window, preset, import). `structureChanged` is true when the month count or any month length differs, which is when dates stored by other modules may have become invalid. |
+| `through-the-ages.calendarConfigured` | `{ calendar, previous: { monthsPerYear, monthLengths, monthNames }, structureChanged }` | The calendar was saved from the configuration window, a preset or an import. Not emitted for Age-only saves. `structureChanged` is true when the month count or any month length differs, which is when dates stored by other modules may have become invalid. |
 
 ### For companion modules
 
@@ -408,7 +408,7 @@ as a fast path.
 key helpers. Using these rather than re-implementing month sums keeps a companion's
 deadlines in exact agreement with the calendar.
 
-`api.relay.createRelay({ moduleId })` builds an instance of the authenticated
+`api.relay.createRelay({ moduleId })` builds (once per module id) an instance of the authenticated
 GM-executed write relay described under *What privacy means here*, with every flag
 namespaced under the companion's own id. It returns `{ request, registerHandler,
 registerRelay, clearStaleRelayFlags, verifyRelayAvailable, isPrimaryGM,
