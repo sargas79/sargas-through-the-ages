@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `through-the-ages.timeChanged` now also carries `previous: { date, time }`,
+  `elapsedSeconds` (signed) and `reason` (`"advance"`, `"set"` or
+  `"nextAdventureDay"`, exposed as `api.TIME_CHANGE_REASON`). Existing keys are
+  unchanged. `advanceTo`, `advanceTime` and `setCurrentDateTime` accept
+  `{ reason }`.
+- `through-the-ages.calendarConfigured` fires after a configuration, preset or
+  import save with the saved calendar, the previous structure and a
+  `structureChanged` flag.
+- `api.utils` gains `addSeconds`, `toAbsoluteDay`, `fromAbsoluteDay` and
+  `campaignSeconds` for companion modules that store calendar dates.
+- `api.relay.createRelay({ moduleId })` lets a companion module use the
+  authenticated User-flag relay under its own flags; `api.relay.isPrimaryGM`
+  exposes the shared executor election. Requested by Sargas Time Bomb.
+
 ### Changed
 
 - **The `−1 day` header control is gone.** Moving the campaign date backwards now

@@ -387,6 +387,35 @@ socket behaviour is verified manually against Foundry v14 build 366.
 
 The public API is available at `game.modules.get("through-the-ages").api`.
 
+### Hooks
+
+Every hook fires on the client that made the change, not on every client. A
+module that must see changes made from any GM's window listens to the
+`updateSetting` document hook for `through-the-ages.calendarData` and uses these
+as a fast path.
+
+| Hook | Payload | When |
+|---|---|---|
+| `through-the-ages.timeChanged` | `{ date, time, previous: { date, time }, elapsedSeconds, reason }` | The campaign date or time was set. `elapsedSeconds` is signed (negative on a rewind). `reason` is one of `api.TIME_CHANGE_REASON`: `"advance"` (the header controls, `advanceTime`, `advanceDays`), `"nextAdventureDay"`, or `"set"` (the date picker, `setCurrentDateTime`, a bare `advanceTo`). |
+| `through-the-ages.dateChanged` | `date` | Same moment, date only. Kept for older listeners. |
+| `through-the-ages.calendarConfigured` | `{ calendar, previous: { monthsPerYear, monthLengths, monthNames }, structureChanged }` | The calendar structure was saved (configuration window, preset, import). `structureChanged` is true when the month count or any month length differs, which is when dates stored by other modules may have become invalid. |
+
+### For companion modules
+
+`api.utils` carries the pure calendar arithmetic, each taking a `calendar` block
+(`api.getCalendar()`): `addDays`, `addSeconds(date, time, seconds, calendar)`,
+`toAbsoluteDay`, `fromAbsoluteDay`, `campaignSeconds(date, time, calendar)` and the
+key helpers. Using these rather than re-implementing month sums keeps a companion's
+deadlines in exact agreement with the calendar.
+
+`api.relay.createRelay({ moduleId })` builds an instance of the authenticated
+GM-executed write relay described under *What privacy means here*, with every flag
+namespaced under the companion's own id. It returns `{ request, registerHandler,
+registerRelay, clearStaleRelayFlags, verifyRelayAvailable, isPrimaryGM,
+hasActiveGM }`. `api.relay.isPrimaryGM()` is the same election this module uses
+(lowest id among connected GMs), so a companion that executes on the primary GM
+always agrees with Through the Ages about who that is.
+
 ---
 
 ## Compatibility

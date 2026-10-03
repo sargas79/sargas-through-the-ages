@@ -11,6 +11,7 @@ import {
   addMonths,
   addSeconds,
   addYears,
+  campaignSeconds,
   clampDate,
   clampTime,
   isValidDate,
@@ -128,6 +129,7 @@ export async function saveData(data, { markConfigured = true } = {}) {
     return null;
   }
 
+  const previous = structureOf(getCalendar());
   const normalized = migrateCalendarData(data);
   const shared = normalized.ages.filter(age => age.playerVisible !== false);
   const hidden = normalized.ages.filter(age => age.playerVisible === false);
@@ -137,7 +139,32 @@ export async function saveData(data, { markConfigured = true } = {}) {
   await game.settings.set(MODULE_ID, SETTINGS.SCHEMA_VERSION, normalized.schemaVersion);
   if (markConfigured) await game.settings.set(MODULE_ID, SETTINGS.CONFIGURED, true);
   log("debug", "Calendar data saved", normalized);
+
+  // One signal for "the calendar's shape may have changed", for modules that
+  // store calendar dates and need to revalidate them. Fires only on the saving
+  // client, like `timeChanged`; configuration is rare and GM-only.
+  const next = structureOf(normalized.calendar);
+  Hooks.callAll(`${MODULE_ID}.calendarConfigured`, {
+    calendar: normalized.calendar,
+    previous,
+    structureChanged: !sameStructure(previous, next)
+  });
   return normalized;
+}
+
+/** The parts of a calendar block that decide whether a stored date is still valid. */
+function structureOf(calendar) {
+  return {
+    monthsPerYear: calendar?.monthsPerYear ?? null,
+    monthLengths: Array.isArray(calendar?.monthLengths) ? [...calendar.monthLengths] : [],
+    monthNames: Array.isArray(calendar?.monthNames) ? [...calendar.monthNames] : []
+  };
+}
+
+function sameStructure(a, b) {
+  return a.monthsPerYear === b.monthsPerYear
+    && a.monthLengths.length === b.monthLengths.length
+    && a.monthLengths.every((length, index) => length === b.monthLengths[index]);
 }
 
 /** Replace the Age list without touching the calendar structure. GM only. */
@@ -155,8 +182,24 @@ export async function setCurrentDate(date) {
   return applied?.date ?? null;
 }
 
-/** Set the shared campaign date and time. Out-of-range values are clamped. */
-export async function setCurrentDateTime(date, time) {
+/**
+ * Why a campaign-date move happened, carried on the `timeChanged` payload so a
+ * listener can tell a deliberate correction from the passage of time.
+ */
+export const TIME_CHANGE_REASON = Object.freeze({
+  ADVANCE: "advance",
+  SET: "set",
+  NEXT_ADVENTURE_DAY: "nextAdventureDay"
+});
+
+/**
+ * Set the shared campaign date and time. Out-of-range values are clamped.
+ *
+ * Emits `through-the-ages.timeChanged` with
+ * `{ date, time, previous: { date, time }, elapsedSeconds, reason }` on this
+ * client, then `through-the-ages.dateChanged` with the date alone.
+ */
+export async function setCurrentDateTime(date, time, { reason = TIME_CHANGE_REASON.SET } = {}) {
   if (!canChangeTime()) {
     ui.notifications.warn(t("TTA.Errors.TimeGMOnly"));
     return null;
@@ -167,6 +210,8 @@ export async function setCurrentDateTime(date, time) {
   if (!isValidDate(date, calendar)) log("warn", "Requested date was out of range and has been clamped", date, target);
 
   const targetTime = clampTime(time);
+  const previous = { date: calendar.currentDate, time: calendar.currentTime };
+  const elapsedSeconds = campaignSeconds(target, targetTime, calendar) - campaignSeconds(previous.date, previous.time, calendar);
   // `data` came from `getData`, which merged the hidden Ages back in for a GM.
   // Writing it whole would put them straight back into the world setting every
   // client reads, so only the shared half goes back.
@@ -180,21 +225,23 @@ export async function setCurrentDateTime(date, time) {
   // stack is only worth collecting when someone is actually reading the log.
   if (isDebug()) {
     log("debug", "Campaign date set", {
-      from: { date: calendar.currentDate, time: calendar.currentTime },
+      from: previous,
       to: { date: target, time: targetTime },
+      elapsedSeconds,
+      reason,
       user: game.user?.name,
       stack: new Error().stack
     });
   }
   await game.settings.set(MODULE_ID, SETTINGS.CALENDAR_DATA, updated);
-  Hooks.callAll(`${MODULE_ID}.timeChanged`, { date: target, time: targetTime });
+  Hooks.callAll(`${MODULE_ID}.timeChanged`, { date: target, time: targetTime, previous, elapsedSeconds, reason });
   Hooks.callAll(`${MODULE_ID}.dateChanged`, target);
   return { date: target, time: targetTime };
 }
 
 /** Advance (or rewind) the campaign date by whole days. GM only. */
 export async function advanceDays(delta) {
-  const result = await advanceTime(Math.trunc(delta) * 86400);
+  const result = await advanceTime(Math.trunc(delta) * 86400, { reason: TIME_CHANGE_REASON.ADVANCE });
   return result?.date ?? null;
 }
 
@@ -202,7 +249,7 @@ export async function advanceDays(delta) {
 export async function advanceMonths(delta) {
   const calendar = getCalendar();
   const target = addMonths(calendar.currentDate, delta, calendar);
-  const result = await advanceTo(target, calendar.currentTime);
+  const result = await advanceTo(target, calendar.currentTime, { reason: TIME_CHANGE_REASON.ADVANCE });
   return result?.date ?? null;
 }
 
@@ -210,25 +257,20 @@ export async function advanceMonths(delta) {
 export async function advanceYears(delta) {
   const calendar = getCalendar();
   const target = addYears(calendar.currentDate, delta, calendar);
-  const result = await advanceTo(target, calendar.currentTime);
+  const result = await advanceTo(target, calendar.currentTime, { reason: TIME_CHANGE_REASON.ADVANCE });
   return result?.date ?? null;
 }
 
 /** Advance the campaign by exact elapsed seconds through Foundry's world clock. */
-export async function advanceTime(seconds) {
+export async function advanceTime(seconds, { reason = TIME_CHANGE_REASON.ADVANCE } = {}) {
   const calendar = getCalendar();
   const target = addSeconds(calendar.currentDate, calendar.currentTime, seconds, calendar);
-  return advanceTo(target.date, target.time);
+  return advanceTo(target.date, target.time, { reason });
 }
 
 /** Advance to 07:00 on the following campaign day. */
 export async function advanceToNextAdventureDay() {
-  return advanceTime(secondsUntilNextAdventureDay(getCurrentTime()));
-}
-
-/** The campaign clock as a single second count, for delta arithmetic. */
-function campaignSeconds(date, time, calendar) {
-  return (toAbsoluteDay(date, calendar) * 86400) + (time.hour * 3600) + (time.minute * 60);
+  return advanceTime(secondsUntilNextAdventureDay(getCurrentTime()), { reason: TIME_CHANGE_REASON.NEXT_ADVENTURE_DAY });
 }
 
 /** True when two stored date/time pairs describe the same campaign moment. */
@@ -251,8 +293,12 @@ function isSameMoment(a, b) {
  */
 let advanceInFlight = false;
 
-/** Apply a target calendar time and its matching delta to Foundry world time. */
-export async function advanceTo(date, time) {
+/**
+ * Apply a target calendar time and its matching delta to Foundry world time.
+ * `reason` is carried onto the `timeChanged` payload; a direct call is a
+ * deliberate "set" unless the caller says otherwise.
+ */
+export async function advanceTo(date, time, { reason = TIME_CHANGE_REASON.SET } = {}) {
   if (!canChangeTime()) {
     ui.notifications.warn(t("TTA.Errors.TimeGMOnly"));
     return null;
@@ -265,14 +311,14 @@ export async function advanceTo(date, time) {
 
   advanceInFlight = true;
   try {
-    return await applyTimeChange(date, time);
+    return await applyTimeChange(date, time, reason);
   } finally {
     advanceInFlight = false;
   }
 }
 
 /** The body of {@link advanceTo}, run under its in-flight guard. */
-async function applyTimeChange(date, time) {
+async function applyTimeChange(date, time, reason) {
   const calendar = getCalendar();
   const targetDate = isValidDate(date, calendar) ? date : clampDate(date, calendar);
   const targetTime = clampTime(time);
@@ -316,7 +362,7 @@ async function applyTimeChange(date, time) {
   }
 
   try {
-    const applied = await setCurrentDateTime(targetDate, targetTime);
+    const applied = await setCurrentDateTime(targetDate, targetTime, { reason });
     return applied ? { ...applied, elapsedSeconds } : null;
   } catch (error) {
     log("error", "Foundry world time advanced but calendar persistence failed", error);

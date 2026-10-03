@@ -15,6 +15,7 @@ import * as moonService from "./services/moon-service.js";
 import * as noteService from "./services/note-service.js";
 import * as portabilityService from "./services/portability-service.js";
 import * as presetService from "./services/preset-service.js";
+import * as relayService from "./services/relay-service.js";
 import * as timelineService from "./services/timeline-service.js";
 import { CalendarApp } from "./applications/calendar-app.js";
 import { CalendarConfigApp } from "./applications/calendar-config-app.js";
@@ -143,12 +144,16 @@ export function buildApi() {
     parseCalendarImport: portabilityService.parseImport,
     importCalendar: importCalendar,
 
-    // Pure helpers, useful for macros
+    // Pure helpers, useful for macros and companion modules
     utils: {
       dayKey: dateService.dayKey,
       monthKey: dateService.monthKey,
       parseKey: dateService.parseKey,
       addDays: dateService.addDays,
+      addSeconds: dateService.addSeconds,
+      toAbsoluteDay: dateService.toAbsoluteDay,
+      fromAbsoluteDay: dateService.fromAbsoluteDay,
+      campaignSeconds: dateService.campaignSeconds,
       weekdayName: dateService.weekdayName,
       endYear: ageService.endYear,
       findAgeForYear: ageService.findAgeForYear,
@@ -156,6 +161,20 @@ export function buildApi() {
       phaseKey: moonService.phaseKey,
       illumination: moonService.illumination,
       daysUntilPhase: moonService.daysUntilPhase
+    },
+
+    /** Why a `timeChanged` payload says time moved. */
+    TIME_CHANGE_REASON: calendarService.TIME_CHANGE_REASON,
+
+    /**
+     * The authenticated GM-executed write relay, for companion modules that
+     * need player-initiated writes without a module socket. See
+     * relay-service.js for what it guarantees and what it rests on.
+     */
+    relay: {
+      createRelay: relayService.createRelay,
+      isPrimaryGM: relayService.isPrimaryGM,
+      hasActiveGM: relayService.hasActiveGM
     },
 
     applications: { CalendarApp, TimelineApp, CalendarConfigApp },
