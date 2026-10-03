@@ -1,5 +1,5 @@
 {
-  "id": "through-the-ages",
+  "id": "sargas-through-the-ages",
   "title": "Through the Ages",
   "description": "A GM-managed custom world calendar, journal-backed campaign notes, and an expandable timeline of Ages and historical events for Foundry VTT.",
   "version": "2.2.0",
@@ -26,23 +26,23 @@
       "path": "lang/en.json"
     }
   ],
-  "url": "https://github.com/sargas79/through-the-ages",
-  "manifest": "https://github.com/sargas79/through-the-ages/releases/latest/download/module.json",
-  "download": "https://github.com/sargas79/through-the-ages/releases/download/v2.2.0/module.zip",
-  "readme": "https://github.com/sargas79/through-the-ages/blob/main/README.md",
-  "changelog": "https://github.com/sargas79/through-the-ages/blob/main/CHANGELOG.md",
-  "bugs": "https://github.com/sargas79/through-the-ages/issues",
+  "url": "https://github.com/sargas79/sargas-through-the-ages",
+  "manifest": "https://github.com/sargas79/sargas-through-the-ages/releases/latest/download/module.json",
+  "download": "https://github.com/sargas79/sargas-through-the-ages/releases/download/v2.2.0/module.zip",
+  "readme": "https://github.com/sargas79/sargas-through-the-ages/blob/main/README.md",
+  "changelog": "https://github.com/sargas79/sargas-through-the-ages/blob/main/CHANGELOG.md",
+  "bugs": "https://github.com/sargas79/sargas-through-the-ages/issues",
   "license": "MIT",
   "media": [
     {
       "type": "cover",
-      "url": "https://raw.githubusercontent.com/sargas79/through-the-ages/main/assets/cover.png",
+      "url": "https://raw.githubusercontent.com/sargas79/sargas-through-the-ages/main/assets/cover.png",
       "loop": false,
       "flags": {}
     },
     {
       "type": "icon",
-      "url": "https://raw.githubusercontent.com/sargas79/through-the-ages/main/assets/icon.png",
+      "url": "https://raw.githubusercontent.com/sargas79/sargas-through-the-ages/main/assets/icon.png",
       "loop": false,
       "flags": {}
     }

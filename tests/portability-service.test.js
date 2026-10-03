@@ -164,7 +164,7 @@ describe("summarizeImport", () => {
 describe("exportFilename", () => {
   it("builds a dated, slug-safe filename", () => {
     const name = exportFilename("My World!", new Date("2026-08-18T10:00:00Z"));
-    assert.equal(name, "through-the-ages-my-world--2026-08-18.json");
+    assert.equal(name, "sargas-through-the-ages-my-world--2026-08-18.json");
   });
 
   it("falls back when the world id is unusable", () => {

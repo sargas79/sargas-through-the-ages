@@ -1,5 +1,5 @@
 /**
- * Public module API, exposed as `game.modules.get("through-the-ages").api`.
+ * Public module API, exposed as `game.modules.get("sargas-through-the-ages").api`.
  *
  * Only stable, permission-checked operations are surfaced here so that macros
  * and companion modules never have to reach into internals.

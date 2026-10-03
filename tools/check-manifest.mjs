@@ -38,7 +38,7 @@ if (pkg.version !== manifest.version) {
 }
 
 const expectedDownload =
-  `https://github.com/sargas79/through-the-ages/releases/download/v${manifest.version}/module.zip`;
+  `https://github.com/sargas79/sargas-through-the-ages/releases/download/v${manifest.version}/module.zip`;
 if (manifest.download !== expectedDownload) {
   errors.push(`module.json download is ${manifest.download}, expected ${expectedDownload}.`);
 }

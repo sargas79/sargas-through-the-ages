@@ -332,13 +332,13 @@ Initial release, targeting Foundry VTT v14 build 366.
 - Full English localisation and a versioned, idempotent data-migration framework.
 - Public API at `game.modules.get("through-the-ages").api`.
 
-[2.0.0]: https://github.com/sargas79/through-the-ages/releases/tag/v2.0.0
-[1.0.8]: https://github.com/sargas79/through-the-ages/releases/tag/v1.0.8
-[1.0.7]: https://github.com/sargas79/through-the-ages/releases/tag/v1.0.7
-[1.0.6]: https://github.com/sargas79/through-the-ages/releases/tag/v1.0.6
-[1.0.5]: https://github.com/sargas79/through-the-ages/releases/tag/v1.0.5
-[1.0.4]: https://github.com/sargas79/through-the-ages/releases/tag/v1.0.4
-[1.0.3]: https://github.com/sargas79/through-the-ages/releases/tag/v1.0.3
-[1.0.2]: https://github.com/sargas79/through-the-ages/releases/tag/v1.0.2
-[1.0.1]: https://github.com/sargas79/through-the-ages/releases/tag/v1.0.1
-[1.0.0]: https://github.com/sargas79/through-the-ages/releases/tag/v1.0.0
+[2.0.0]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v2.0.0
+[1.0.8]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v1.0.8
+[1.0.7]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v1.0.7
+[1.0.6]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v1.0.6
+[1.0.5]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v1.0.5
+[1.0.4]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v1.0.4
+[1.0.3]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v1.0.3
+[1.0.2]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v1.0.2
+[1.0.1]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v1.0.1
+[1.0.0]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v1.0.0

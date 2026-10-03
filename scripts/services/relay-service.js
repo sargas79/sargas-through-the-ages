@@ -72,7 +72,7 @@ export function hasActiveGM() {
  * Build a relay bound to one module id.
  *
  * Through the Ages uses the instance exported from this file. A companion
- * module calls `game.modules.get("through-the-ages").api.relay.createRelay({
+ * module calls `game.modules.get("sargas-through-the-ages").api.relay.createRelay({
  * moduleId })` and gets the same transport with its traffic namespaced under
  * its own flags, so the two never read each other's requests. Both share the
  * executor election above, so they always agree on who the primary GM is.
