@@ -434,7 +434,9 @@ The published version comes from the git tag and nothing else.
    when the number is already decided.
 2. Set the same `X.Y.Z` in `module.json` (both `version` and the `download` URL) and
    in `package.json`, then run `node tools/check-manifest.mjs`.
-3. Tag `vX.Y.Z` and push it.
+3. Tag `vX.Y.Z` and push it. If tags cannot be pushed from where you are, run
+   the **Release** workflow by hand with the tag name; it creates the tag on the
+   dispatched commit when it does not exist yet.
 
 The release workflow runs the tests and the manifest check, stamps the tag's version
 onto `module.json`, reconciles the CHANGELOG — renaming `[Unreleased]` to the tag's
