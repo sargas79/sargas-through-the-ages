@@ -4,7 +4,7 @@
  * it can be unit tested outside of a Foundry runtime.
  */
 
-export const MODULE_ID = "through-the-ages";
+export const MODULE_ID = "sargas-through-the-ages";
 export const MODULE_TITLE = "Through the Ages";
 export const SCHEMA_VERSION = 5;
 
@@ -32,7 +32,7 @@ export const SETTINGS = {
   WORLD_TIME: "synchronizedWorldTime"
 };
 
-/** Flag keys written under `flags.through-the-ages`. */
+/** Flag keys written under `flags.sargas-through-the-ages`. */
 export const FLAGS = {
   NOTE: "note",
   ENTRY: "entry",

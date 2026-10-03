@@ -57,11 +57,11 @@ but nothing repeats them the following year.
 **From a manifest URL** — in the same dialog, paste:
 
 ```
-https://github.com/sargas79/through-the-ages/releases/latest/download/module.json
+https://github.com/sargas79/sargas-through-the-ages/releases/latest/download/module.json
 ```
 
 **Manually** — download the release archive and extract it so the module lives at
-`Data/modules/through-the-ages/`. The folder name must match the package id exactly.
+`Data/modules/sargas-through-the-ages/`. The folder name must match the package id exactly.
 
 Then enable **Through the Ages** in *Game Settings → Manage Modules*.
 
@@ -196,7 +196,7 @@ when you load a preset.
 You can also apply a preset from a macro:
 
 ```js
-const api = game.modules.get("through-the-ages").api;
+const api = game.modules.get("sargas-through-the-ages").api;
 api.listPresets();                                    // ids, labels, descriptions
 await api.applyPreset("harptos", { createHolidays: true });
 ```
@@ -274,11 +274,11 @@ identity behind it is something the server vouched for.
 
 | Data | Location |
 |---|---|
-| Calendar structure, month lengths, current date, moons, player-visible Ages | world setting `through-the-ages.calendarData` |
-| Player-visible timeline events | world setting `through-the-ages.timelineEvents` |
+| Calendar structure, month lengths, current date, moons, player-visible Ages | world setting `sargas-through-the-ages.calendarData` |
+| Player-visible timeline events | world setting `sargas-through-the-ages.timelineEvents` |
 | Hidden Ages, GM-only timeline events | flags on the **Calendar (GM only)** journal entry, which nobody owns |
 | Note text | Journal Entry Pages in the **Calendar Notes** folder |
-| Note metadata (date key, author, visibility) | page flags under `flags.through-the-ages` |
+| Note metadata (date key, author, visibility) | page flags under `flags.sargas-through-the-ages` |
 | Browsing position, filters | per-client, never shared |
 | In-flight player note writes | flags on the requesting player's own User document, cleared once handled |
 
@@ -352,7 +352,7 @@ grown again.
 ## Troubleshooting
 
 **The Calendar icon does not appear.** Confirm the module is enabled and that the
-folder is named exactly `through-the-ages`.
+folder is named exactly `sargas-through-the-ages`.
 
 **A player cannot save a note.** Check *Allow player notes* and *Player note scope* in
 the module settings, and make sure a GM is connected — player writes need a GM online.
@@ -385,20 +385,20 @@ The pure services — date arithmetic, Ages, validation, migrations — carry un
 under `tests/` and run under `node --test` with no Foundry runtime. UI, journal, and
 socket behaviour is verified manually against Foundry v14 build 366.
 
-The public API is available at `game.modules.get("through-the-ages").api`.
+The public API is available at `game.modules.get("sargas-through-the-ages").api`.
 
 ### Hooks
 
 Every hook fires on the client that made the change, not on every client. A
 module that must see changes made from any GM's window listens to the
-`updateSetting` document hook for `through-the-ages.calendarData` and uses these
+`updateSetting` document hook for `sargas-through-the-ages.calendarData` and uses these
 as a fast path.
 
 | Hook | Payload | When |
 |---|---|---|
-| `through-the-ages.timeChanged` | `{ date, time, previous: { date, time }, elapsedSeconds, reason }` | The campaign date or time was set. `elapsedSeconds` is signed (negative on a rewind). `reason` is one of `api.TIME_CHANGE_REASON`: `"advance"` (the header controls, `advanceTime`, `advanceDays`), `"nextAdventureDay"`, or `"set"` (the date picker, `setCurrentDateTime`, a bare `advanceTo`). |
-| `through-the-ages.dateChanged` | `date` | Same moment, date only. Kept for older listeners. |
-| `through-the-ages.calendarConfigured` | `{ calendar, previous: { monthsPerYear, monthLengths, monthNames }, structureChanged }` | The calendar was saved from the configuration window, a preset or an import. Not emitted for Age-only saves. `structureChanged` is true when the month count or any month length differs, which is when dates stored by other modules may have become invalid. |
+| `sargas-through-the-ages.timeChanged` | `{ date, time, previous: { date, time }, elapsedSeconds, reason }` | The campaign date or time was set. `elapsedSeconds` is signed (negative on a rewind). `reason` is one of `api.TIME_CHANGE_REASON`: `"advance"` (the header controls, `advanceTime`, `advanceDays`), `"nextAdventureDay"`, or `"set"` (the date picker, `setCurrentDateTime`, a bare `advanceTo`). |
+| `sargas-through-the-ages.dateChanged` | `date` | Same moment, date only. Kept for older listeners. |
+| `sargas-through-the-ages.calendarConfigured` | `{ calendar, previous: { monthsPerYear, monthLengths, monthNames }, structureChanged }` | The calendar was saved from the configuration window, a preset or an import. Not emitted for Age-only saves. `structureChanged` is true when the month count or any month length differs, which is when dates stored by other modules may have become invalid. |
 
 ### For companion modules
 

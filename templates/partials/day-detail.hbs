@@ -40,7 +40,7 @@
     </ul>
   {{/if}}
 
-  {{> "modules/through-the-ages/templates/partials/note-list.hbs" notes=dayNotes canPromote=canPromote emptyLabel=(localize "TTA.Notes.NoDayNotes")}}
+  {{> "modules/sargas-through-the-ages/templates/partials/note-list.hbs" notes=dayNotes canPromote=canPromote emptyLabel=(localize "TTA.Notes.NoDayNotes")}}
 
   {{#if dayEvents.length}}
     <ul class="tta-day-event-list" aria-label="{{localize "TTA.Timeline.EventsOnDay"}}">
@@ -64,7 +64,7 @@
     {{/if}}
   </div>
 
-  {{> "modules/through-the-ages/templates/partials/note-list.hbs" notes=monthNotes canPromote=false emptyLabel=(localize "TTA.Notes.NoMonthNotes")}}
+  {{> "modules/sargas-through-the-ages/templates/partials/note-list.hbs" notes=monthNotes canPromote=false emptyLabel=(localize "TTA.Notes.NoMonthNotes")}}
 </section>
 
 {{#if playerNotesDisabled}}

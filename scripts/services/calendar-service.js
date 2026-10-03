@@ -198,9 +198,9 @@ export const TIME_CHANGE_REASON = Object.freeze({
 /**
  * Set the shared campaign date and time. Out-of-range values are clamped.
  *
- * Emits `through-the-ages.timeChanged` with
+ * Emits `sargas-through-the-ages.timeChanged` with
  * `{ date, time, previous: { date, time }, elapsedSeconds, reason }` on this
- * client, then `through-the-ages.dateChanged` with the date alone.
+ * client, then `sargas-through-the-ages.dateChanged` with the date alone.
  */
 export async function setCurrentDateTime(date, time, { reason = TIME_CHANGE_REASON.SET } = {}) {
   if (!canChangeTime()) {
