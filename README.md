@@ -1,8 +1,8 @@
-# Through the Ages
+# Sargas Through the Ages
 
 A world-calendar and campaign-history module for **Foundry VTT v14 (build 366)**.
 
-Through the Ages gives a world one shared, fully custom calendar; stores campaign
+Sargas Through the Ages gives a world one shared, fully custom calendar; stores campaign
 notes as real Journal Entries; and adds a separate visual timeline of **Ages** and
 historical **events**. Everything is reachable from a single **Calendar** button at
 the top of the **Journal** tab in the sidebar.
@@ -51,7 +51,7 @@ but nothing repeats them the following year.
 
 ## Installation
 
-**From the package directory** — search for **Through the Ages** in Foundry's
+**From the package directory** — search for **Sargas Through the Ages** in Foundry's
 *Add-on Modules → Install Module* browser.
 
 **From a manifest URL** — in the same dialog, paste:
@@ -63,14 +63,14 @@ https://github.com/sargas79/sargas-through-the-ages/releases/latest/download/mod
 **Manually** — download the release archive and extract it so the module lives at
 `Data/modules/sargas-through-the-ages/`. The folder name must match the package id exactly.
 
-Then enable **Through the Ages** in *Game Settings → Manage Modules*.
+Then enable **Sargas Through the Ages** in *Game Settings → Manage Modules*.
 
 ---
 
 ## First-time setup
 
 1. Enable the module. Nothing is created in your world until you save a configuration.
-2. Open **Game Settings → Configure Settings → Through the Ages → Configure Calendar**.
+2. Open **Game Settings → Configure Settings → Sargas Through the Ages → Configure Calendar**.
    (The same window is reachable from the gear button inside the calendar itself.)
 3. Set the months per year, days per month, and the number of weekdays. Every month
    uses the same number of days in 1.0.
