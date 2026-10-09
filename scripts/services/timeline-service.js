@@ -187,6 +187,10 @@ export async function deleteEvent(eventId) {
  * The source note is never modified beyond recording the link, and is never
  * deleted. If the note later disappears the event keeps working; the GM-only
  * origin indicator simply reports the source as unavailable.
+ *
+ * A note a player wrote becomes an event every player sees: the table's own
+ * record of what happened belongs on the shared timeline, so the GM's choice of
+ * visibility applies only to promoting their own notes.
  */
 export async function promoteNote(noteView, { dateKey, title, description, visibility, color, icon, shareNote } = {}) {
   if (!canManageEvents()) {
@@ -197,7 +201,7 @@ export async function promoteNote(noteView, { dateKey, title, description, visib
     dateKey: dateKey ?? noteView.dateKey,
     title: title ?? noteView.title,
     description: description ?? noteView.content ?? "",
-    visibility: visibility ?? VISIBILITY.GM_ONLY,
+    visibility: isPlayerNote(noteView) ? VISIBILITY.PLAYERS : (visibility ?? VISIBILITY.GM_ONLY),
     color,
     icon,
     source: { type: EVENT_SOURCE.PROMOTED, noteUuid: noteView.uuid }
@@ -207,6 +211,11 @@ export async function promoteNote(noteView, { dateKey, title, description, visib
   await linkNoteToEvent(noteView.uuid, event.id);
   if (shareNote === true) await updateNotePage(noteView.uuid, { visibility: VISIBILITY.PLAYERS });
   return event;
+}
+
+/** Whether a note view was written by a player rather than a GM. */
+export function isPlayerNote(noteView) {
+  return !!noteView && !noteView.isGMNote;
 }
 
 /** The shared timeline display mode. */

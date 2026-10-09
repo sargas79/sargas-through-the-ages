@@ -256,3 +256,42 @@ describe("the schema 5 migration", () => {
     assert.equal(await calendar.runMigrationIfNeeded(), false);
   });
 });
+
+describe("promoted notes", () => {
+  const note = (isGMNote) => ({
+    uuid: "JournalEntry.x.JournalEntryPage.y",
+    dateKey: "0001-01-07",
+    title: "We burned the bridge",
+    content: "<p>No going back now.</p>",
+    isGMNote
+  });
+
+  async function promote(noteView, options) {
+    harness = installJournalWorld({ isGM: true });
+    const previousFromUuid = globalThis.fromUuid;
+    // The source page itself is not under test; linking simply finds nothing.
+    globalThis.fromUuid = async () => null;
+    try {
+      const { calendar, timeline } = await loadServices();
+      await calendar.saveData(structuredClone(DEFAULT_CALENDAR_DATA));
+      return await timeline.promoteNote(noteView, options);
+    } finally {
+      globalThis.fromUuid = previousFromUuid;
+    }
+  }
+
+  it("become player-visible when a player wrote the note, whatever was asked", async () => {
+    const event = await promote(note(false), { visibility: VISIBILITY.GM_ONLY });
+
+    assert.equal(event.visibility, VISIBILITY.PLAYERS);
+    const stored = harness.settings.get(`${MODULE_ID}.${SETTINGS.TIMELINE_EVENTS}`);
+    assert.deepEqual(stored.map(candidate => candidate.title), ["We burned the bridge"]);
+  });
+
+  it("keep the GM's chosen visibility for a GM's own note", async () => {
+    const event = await promote(note(true), { visibility: VISIBILITY.GM_ONLY });
+
+    assert.equal(event.visibility, VISIBILITY.GM_ONLY);
+    assert.deepEqual(harness.settings.get(`${MODULE_ID}.${SETTINGS.TIMELINE_EVENTS}`), []);
+  });
+});

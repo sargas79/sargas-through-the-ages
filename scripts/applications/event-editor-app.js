@@ -10,7 +10,7 @@ import { DEFAULT_COLOR, MODULE_ID, SCOPE, VISIBILITY } from "../constants.js";
 import { formatDate, getCalendar } from "../services/calendar-service.js";
 import { dayKey, maxDaysInMonth, parseKey } from "../services/date-service.js";
 import { canManageEvents } from "../services/permission-service.js";
-import { createEvent, promoteNote, updateEvent } from "../services/timeline-service.js";
+import { createEvent, isPlayerNote, promoteNote, updateEvent } from "../services/timeline-service.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -80,6 +80,8 @@ export class EventEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
         (this.sourceNote.content ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 400)
       )
       : "";
+    // A player's note always becomes a player-visible event; see promoteNote.
+    const visibilityLocked = !!this.sourceNote && isPlayerNote(this.sourceNote);
 
     return {
       event: this.event,
@@ -96,7 +98,8 @@ export class EventEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
       colorSwatches: COLOR_SWATCHES,
       icon: this.event?.icon ?? ICON_CHOICES[0],
       iconChoices: ICON_CHOICES.map(value => ({ value, selected: value === (this.event?.icon ?? ICON_CHOICES[0]) })),
-      visibility: this.event?.visibility ?? VISIBILITY.GM_ONLY,
+      visibility: visibilityLocked ? VISIBILITY.PLAYERS : (this.event?.visibility ?? VISIBILITY.GM_ONLY),
+      visibilityLocked,
       visibilityChoices: [
         { value: VISIBILITY.GM_ONLY, label: t(`TTA.Visibility.${VISIBILITY.GM_ONLY}`) },
         { value: VISIBILITY.PLAYERS, label: t(`TTA.Visibility.${VISIBILITY.PLAYERS}`) }

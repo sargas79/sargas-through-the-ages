@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- **The module id is now `sargas-through-the-ages`** (was `through-the-ages`),
+  following the repository rename. Foundry treats it as a different module:
+  install it into a `sargas-through-the-ages` folder. World settings and document
+  flags stored under the old id are not migrated. Companion modules must use
+  `game.modules.get("sargas-through-the-ages").api` and listen for
+  `sargas-through-the-ages.timeChanged`, `.dateChanged` and
+  `.calendarConfigured`.
+
+### Changed
+
+- A timeline event promoted from a player's note is now always visible to all
+  players. The event editor shows the visibility as fixed for those notes;
+  promoting a GM's own note still defaults to GM only.
+
+## [2.2.0] - 2026-10-03
+
 ### Added
 
 - `through-the-ages.timeChanged` now also carries `previous: { date, time }`,
@@ -332,6 +350,7 @@ Initial release, targeting Foundry VTT v14 build 366.
 - Full English localisation and a versioned, idempotent data-migration framework.
 - Public API at `game.modules.get("through-the-ages").api`.
 
+[2.2.0]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v2.2.0
 [2.0.0]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v2.0.0
 [1.0.8]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v1.0.8
 [1.0.7]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v1.0.7
