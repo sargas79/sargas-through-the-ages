@@ -39,7 +39,7 @@ jobs:
           if git ls-remote --exit-code --tags origin "refs/tags/$TTA_TAG" >/dev/null 2>&1; then
             git fetch origin "refs/tags/$TTA_TAG:refs/tags/$TTA_TAG"
           else
-            git tag -a "$TTA_TAG" -m "Through the Ages ${TTA_TAG#[vV]}"
+            git tag -a "$TTA_TAG" -m "Sargas Through the Ages ${TTA_TAG#[vV]}"
             git push origin "refs/tags/$TTA_TAG"
           fi
           git checkout --quiet "$TTA_TAG"
@@ -97,7 +97,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: Through the Ages ${{ steps.version.outputs.tag }}
+          name: Sargas Through the Ages ${{ steps.version.outputs.tag }}
           files: |
             module.json
             module.zip
