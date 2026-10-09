@@ -6,13 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-10-09
+
+### Fixed
+
+- Worlds upgraded from `through-the-ages` opened onto an empty calendar. On the
+  first GM login the calendar, timeline events, settings and note flags stored
+  under the old id are now copied to the new one. The old data is left in place,
+  and a GM-only store created by an earlier 3.0.0 start-up is folded into the
+  original. `api.migrateLegacyData()` runs the copy again on demand.
+
+## [3.0.0] - 2026-10-09
+
 ### Breaking
 
 - **The module id is now `sargas-through-the-ages`** (was `through-the-ages`),
   following the repository rename. Foundry treats it as a different module:
   install it into a `sargas-through-the-ages` folder. World settings and document
-  flags stored under the old id are not migrated. Companion modules must use
-  `game.modules.get("sargas-through-the-ages").api` and listen for
+  flags stored under the old id are not migrated (fixed in 3.0.1). Companion
+  modules must use `game.modules.get("sargas-through-the-ages").api` and listen for
   `sargas-through-the-ages.timeChanged`, `.dateChanged` and
   `.calendarConfigured`.
 

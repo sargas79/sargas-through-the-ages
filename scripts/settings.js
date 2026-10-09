@@ -68,6 +68,14 @@ export function registerSettings() {
     onChange: () => rerenderModuleApps()
   });
 
+  // Set once data stored under the pre-3.0.0 module id has been copied over.
+  game.settings.register(MODULE_ID, SETTINGS.LEGACY_ID_MIGRATED, {
+    scope: "world",
+    config: false,
+    type: Boolean,
+    default: false
+  });
+
   // --- GM-facing options ----------------------------------------------------
 
   game.settings.registerMenu(MODULE_ID, "calendarConfigMenu", {

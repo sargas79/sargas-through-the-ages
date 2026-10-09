@@ -5,6 +5,8 @@
  */
 
 export const MODULE_ID = "sargas-through-the-ages";
+/** The id used before 3.0.0. Data stored under it is copied over on start-up. */
+export const LEGACY_MODULE_ID = "through-the-ages";
 export const MODULE_TITLE = "Through the Ages";
 export const SCHEMA_VERSION = 5;
 
@@ -29,7 +31,8 @@ export const SETTINGS = {
   TIMELINE_MODE: "defaultTimelineMode",
   DEBUG: "debugLogging",
   SCHEMA_VERSION: "schemaVersion",
-  WORLD_TIME: "synchronizedWorldTime"
+  WORLD_TIME: "synchronizedWorldTime",
+  LEGACY_ID_MIGRATED: "legacyIdMigrated"
 };
 
 /** Flag keys written under `flags.sargas-through-the-ages`. */
