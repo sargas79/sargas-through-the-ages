@@ -185,6 +185,7 @@
       "PromoteBody": "A new timeline event will be created from this note. The original note is kept unchanged.",
       "PromoteHeading": "Promote note to timeline event",
       "ShareSourceHint": "Leave unticked to keep the original note exactly as it is.",
+      "PlayerNoteVisibilityHint": "Events made from a player's note are always visible to all players.",
       "ShareSourceNote": "Also make the original note visible to players",
       "TitleEdit": "Edit Timeline Event",
       "TitleField": "Title",

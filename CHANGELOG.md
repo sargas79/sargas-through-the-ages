@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A timeline event promoted from a player's note is now always visible to all
+  players. The event editor shows the visibility as fixed for those notes;
+  promoting a GM's own note still defaults to GM only.
 - **The `−1 day` header control is gone.** Moving the campaign date backwards now
   takes a deliberate day selection: pick the day in the month grid and use **Set as
   current date** in the day panel, or **Set date & time…** in the header. Both

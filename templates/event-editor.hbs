@@ -45,11 +45,17 @@
   <div class="tta-field-grid">
     <div class="tta-field">
       <label for="tta-event-visibility">{{localize "TTA.EventEditor.VisibilityField"}}</label>
-      <select id="tta-event-visibility" name="visibility">
+      {{!-- A disabled control is not submitted, so a locked visibility travels
+            in a hidden input; the service enforces it either way. --}}
+      <select id="tta-event-visibility" {{#if visibilityLocked}}disabled{{else}}name="visibility"{{/if}}>
         {{#each visibilityChoices}}
           <option value="{{value}}" {{#if (ttaEq value ../visibility)}}selected{{/if}}>{{label}}</option>
         {{/each}}
       </select>
+      {{#if visibilityLocked}}
+        <input type="hidden" name="visibility" value="{{visibility}}">
+        <p class="tta-hint">{{localize "TTA.EventEditor.PlayerNoteVisibilityHint"}}</p>
+      {{/if}}
     </div>
 
     <div class="tta-field">
