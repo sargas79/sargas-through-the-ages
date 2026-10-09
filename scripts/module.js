@@ -18,6 +18,7 @@ import {
   runMigrationIfNeeded
 } from "./services/calendar-service.js";
 import { ensureFolder } from "./services/journal-service.js";
+import { migrateLegacyModuleId } from "./services/legacy-id-service.js";
 import { ensurePrivateEntry, repairPrivateOwnership } from "./services/private-store-service.js";
 import { registerRelayHandlers } from "./services/note-service.js";
 import { isGM } from "./services/permission-service.js";
@@ -61,6 +62,9 @@ Hooks.once("ready", async () => {
   if (isGM()) {
     registerRelayHandlers();
     try {
+      // Before anything else reads or creates module data, so it finds the
+      // calendar, notes and timeline stored under the pre-3.0.0 id.
+      await migrateLegacyModuleId();
       await runMigrationIfNeeded();
       await ensureFolder();
       await ensurePrivateEntry();

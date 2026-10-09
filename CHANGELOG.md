@@ -6,13 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Worlds upgraded from `through-the-ages` opened onto an empty calendar. On the
+  first GM login the calendar, timeline events, settings and note flags stored
+  under the old id are now copied to the new one. The old data is left in place,
+  and a GM-only store created by an earlier 3.0.0 start-up is folded into the
+  original. `api.migrateLegacyData()` runs the copy again on demand.
+
+## [3.0.0] - 2026-10-09
+
 ### Breaking
 
 - **The module id is now `sargas-through-the-ages`** (was `through-the-ages`),
   following the repository rename. Foundry treats it as a different module:
   install it into a `sargas-through-the-ages` folder. World settings and document
-  flags stored under the old id are not migrated. Companion modules must use
-  `game.modules.get("sargas-through-the-ages").api` and listen for
+  flags stored under the old id are not migrated (fixed in 3.0.1). Companion
+  modules must use `game.modules.get("sargas-through-the-ages").api` and listen for
   `sargas-through-the-ages.timeChanged`, `.dateChanged` and
   `.calendarConfigured`.
 
@@ -350,6 +360,7 @@ Initial release, targeting Foundry VTT v14 build 366.
 - Full English localisation and a versioned, idempotent data-migration framework.
 - Public API at `game.modules.get("through-the-ages").api`.
 
+[3.0.0]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v3.0.0
 [2.2.0]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v2.2.0
 [2.0.0]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v2.0.0
 [1.0.8]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v1.0.8

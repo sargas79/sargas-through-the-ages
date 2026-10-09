@@ -10,6 +10,7 @@ import { MODULE_ID } from "./constants.js";
 import * as ageService from "./services/age-service.js";
 import * as calendarService from "./services/calendar-service.js";
 import * as dateService from "./services/date-service.js";
+import * as legacyIdService from "./services/legacy-id-service.js";
 import * as journalService from "./services/journal-service.js";
 import * as moonService from "./services/moon-service.js";
 import * as noteService from "./services/note-service.js";
@@ -120,6 +121,8 @@ export function buildApi() {
     updateNote: noteService.updateNote,
     deleteNote: noteService.deleteNote,
     repairNotesFolder: journalService.repairFolder,
+    /** Copy data stored under the pre-3.0.0 module id again. GM only. */
+    migrateLegacyData: () => legacyIdService.migrateLegacyModuleId({ force: true }),
 
     // Timeline
     getEvents: timelineService.getVisibleEvents,
