@@ -24,6 +24,7 @@ import {
 import { describePhase, sortMoons, visibleMoons } from "./moon-service.js";
 import { migrateCalendarData, migrateEvents, needsMigration } from "./migration-service.js";
 import { findParty, partyForUser, partyMoment, sortParties } from "./party-service.js";
+import { syncPartyEntries } from "./party-store-service.js";
 import { canChangeTime, canConfigureCalendar, isGM } from "./permission-service.js";
 import { ensurePrivateEntry, readPrivate, writePrivate } from "./private-store-service.js";
 
@@ -238,6 +239,10 @@ export async function saveData(data, { markConfigured = true, announce = true } 
   await game.settings.set(MODULE_ID, SETTINGS.CALENDAR_DATA, { ...normalized, ages: shared });
   await game.settings.set(MODULE_ID, SETTINGS.SCHEMA_VERSION, normalized.schemaVersion);
   if (markConfigured) await game.settings.set(MODULE_ID, SETTINGS.CONFIGURED, true);
+  // Each party's store exists and is readable by exactly its members from the
+  // moment the party is saved, so a player moved between parties changes what
+  // they can read on the same save.
+  await syncPartyEntries(normalized.parties);
   log("debug", "Calendar data saved", normalized);
 
   // One signal for "the calendar's shape may have changed", for modules that

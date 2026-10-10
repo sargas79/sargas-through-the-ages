@@ -35,6 +35,13 @@ class StubEntry {
   async update(changes) {
     if (changes.ownership) this.ownership = changes.ownership;
     if (changes.folder) this.folder = { id: changes.folder };
+    if (changes.name) this.name = changes.name;
+    return this;
+  }
+
+  async delete() {
+    const index = this.world.entries.indexOf(this);
+    if (index >= 0) this.world.entries.splice(index, 1);
     return this;
   }
 

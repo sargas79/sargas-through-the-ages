@@ -19,6 +19,13 @@ export const NOTES_FOLDER_NAME = "Calendar Notes";
  */
 export const PRIVATE_ENTRY_NAME = "Calendar (GM only)";
 
+/**
+ * Name of a party's store entry, with `{name}` standing for the party's name.
+ * Each party has one such entry in the notes folder, readable by its members
+ * and the GMs and delivered to nobody else. See `party-store-service.js`.
+ */
+export const PARTY_ENTRY_NAME = "Calendar (party: {name})";
+
 /** World and client setting keys. */
 export const SETTINGS = {
   CALENDAR_DATA: "calendarData",
@@ -45,7 +52,10 @@ export const FLAGS = {
   RELAY_PROBE: "relayProbe",
   /** Marks the GM-only entry, and carries its payload. */
   PRIVATE_ENTRY: "privateStore",
-  PRIVATE_DATA: "privateData"
+  PRIVATE_DATA: "privateData",
+  /** Marks a party's store entry with the party's id, and carries its payload. */
+  PARTY_ENTRY: "partyStore",
+  PARTY_DATA: "partyData"
 };
 
 /** Note visibility classifications. */

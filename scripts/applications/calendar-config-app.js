@@ -29,6 +29,7 @@ import * as note from "../services/note-service.js";
 import { migrateCalendarData, resizeMonthLengths, resizeNames } from "../services/migration-service.js";
 import { clampCycleLength, describePhase, sortMoons } from "../services/moon-service.js";
 import { canConfigureCalendar } from "../services/permission-service.js";
+import * as partyStore from "../services/party-store-service.js";
 import * as privateStore from "../services/private-store-service.js";
 import * as portability from "../services/portability-service.js";
 import * as presets from "../services/preset-service.js";
@@ -846,6 +847,7 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
     // The GM-only store is an ordinary-looking journal entry in the sidebar, so
     // its permissions can be changed there by accident. Repair resets them.
     await privateStore.repairPrivateOwnership();
+    await partyStore.repairPartyOwnership(getData().parties);
     ui.notifications.info(t("TTA.Notifications.FolderRepaired", { count: result.repaired }));
     this.render();
   }
