@@ -209,15 +209,20 @@ export function migrateNoteFlags(flags) {
   const source = flags && typeof flags === "object" ? flags : {};
   const parsed = parseKey(source.dateKey);
   if (!parsed) return null;
-  const visibility = Object.values(VISIBILITY).includes(source.visibility)
+  let visibility = Object.values(VISIBILITY).includes(source.visibility)
     ? source.visibility
     : VISIBILITY.GM_ONLY;
+  const partyId = typeof source.partyId === "string" && source.partyId ? source.partyId : null;
+  // A party note with no party is a note nobody but its author could ever
+  // reach, so it reads as the author's private note instead.
+  if (visibility === VISIBILITY.PARTY && !partyId) visibility = VISIBILITY.AUTHOR_AND_GM;
   return {
     dateKey: source.dateKey,
     scope: parsed.scope,
     authorId: source.authorId ?? null,
     authorName: source.authorName ?? "",
     visibility,
+    partyId: visibility === VISIBILITY.PARTY ? partyId : null,
     timelineEventId: source.timelineEventId ?? null,
     createdAt: source.createdAt ?? new Date(0).toISOString(),
     updatedAt: source.updatedAt ?? source.createdAt ?? new Date(0).toISOString()

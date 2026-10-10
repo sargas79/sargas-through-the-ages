@@ -62,7 +62,9 @@ export const FLAGS = {
 export const VISIBILITY = {
   GM_ONLY: "gm-only",
   AUTHOR_AND_GM: "author-and-gm",
-  PLAYERS: "players"
+  PLAYERS: "players",
+  /** Notes only: the author, the GMs and the members of the note's party. */
+  PARTY: "party"
 };
 
 /** Calendar scope of a note. */

@@ -337,6 +337,7 @@ export function validateNote(note, calendar) {
   }
   if (![SCOPE.DAY, SCOPE.MONTH].includes(note?.scope)) errors.push(issue("noteScopeInvalid"));
   if (!Object.values(VISIBILITY).includes(note?.visibility)) errors.push(issue("noteVisibilityInvalid"));
+  else if (note.visibility === VISIBILITY.PARTY && !note.partyId) errors.push(issue("notePartyMissing"));
 
   const parsed = parseKey(note?.dateKey);
   if (!parsed) {

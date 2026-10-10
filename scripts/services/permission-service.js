@@ -62,12 +62,18 @@ export function allowedNoteScopes(user = game.user) {
 /**
  * Whether a note (described by its module flags) is visible to a user.
  * GMs always see every note.
+ *
+ * This file knows nothing about parties, so a party note's membership test is
+ * the caller's to supply: `isPartyMember` says whether the user is in the
+ * note's party. The author sees their own party note whether or not they are
+ * still in that party.
  */
-export function canViewNote(noteFlags, user = game.user) {
+export function canViewNote(noteFlags, user = game.user, { isPartyMember = false } = {}) {
   if (!noteFlags) return false;
   if (isGM(user)) return true;
   if (noteFlags.visibility === VISIBILITY.PLAYERS) return true;
   if (noteFlags.visibility === VISIBILITY.AUTHOR_AND_GM) return noteFlags.authorId === user.id;
+  if (noteFlags.visibility === VISIBILITY.PARTY) return isPartyMember || noteFlags.authorId === user.id;
   return false;
 }
 
@@ -109,14 +115,24 @@ export function canSetTimelineMode(user = game.user) {
 /**
  * Foundry ownership levels for a note page, derived from its visibility.
  * GM accounts always retain access through their global GM role.
+ *
+ * A party note names its members here, since this is where the document's
+ * delivery is decided: the members observe, the author owns, nobody else gets
+ * the page at all.
  */
-export function ownershipForVisibility(visibility, authorId) {
+export function ownershipForVisibility(visibility, authorId, partyMembers = []) {
   const LEVELS = CONST.DOCUMENT_OWNERSHIP_LEVELS;
   switch (visibility) {
     case VISIBILITY.PLAYERS:
       return { default: LEVELS.OBSERVER };
     case VISIBILITY.AUTHOR_AND_GM: {
       const ownership = { default: LEVELS.NONE };
+      if (authorId) ownership[authorId] = LEVELS.OWNER;
+      return ownership;
+    }
+    case VISIBILITY.PARTY: {
+      const ownership = { default: LEVELS.NONE };
+      for (const userId of partyMembers ?? []) ownership[userId] = LEVELS.OBSERVER;
       if (authorId) ownership[authorId] = LEVELS.OWNER;
       return ownership;
     }

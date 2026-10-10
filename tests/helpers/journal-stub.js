@@ -12,6 +12,40 @@ import { MODULE_ID, SETTINGS } from "../../scripts/constants.js";
 
 const LEVELS = { NONE: 0, LIMITED: 1, OBSERVER: 2, OWNER: 3 };
 
+/** Whether a user would receive a document with this ownership at all. */
+function delivered(ownership, user) {
+  if (user.isGM) return true;
+  return (ownership[user.id] ?? ownership.default ?? LEVELS.NONE) > LEVELS.NONE;
+}
+
+/** One note page: the slice of JournalEntryPage the journal service touches. */
+class StubPage {
+  constructor(entry, { _id, name, type = "text", text = {}, ownership = {}, flags = {} }) {
+    this.parent = entry;
+    this.id = _id;
+    this.uuid = `JournalEntry.${entry.id}.JournalEntryPage.${_id}`;
+    this.name = name;
+    this.type = type;
+    this.text = text;
+    this.ownership = { default: LEVELS.NONE, ...ownership };
+    this.flags = flags;
+  }
+
+  getFlag(scope, key) {
+    return this.flags[scope]?.[key];
+  }
+
+  async setFlag(scope, key, value) {
+    this.flags[scope] ??= {};
+    this.flags[scope][key] = value;
+    return this;
+  }
+
+  visibleTo(user) {
+    return delivered(this.ownership, user);
+  }
+}
+
 class StubEntry {
   constructor(world, { id, name, folder = null, ownership = {}, flags = {} }) {
     this.world = world;
@@ -20,6 +54,16 @@ class StubEntry {
     this.folder = folder ? { id: folder } : null;
     this.ownership = { default: LEVELS.NONE, ...ownership };
     this.flags = flags;
+    /** Every page, whoever may see it. */
+    this.allPages = [];
+  }
+
+  /**
+   * The pages this client receives. A page is delivered on its own ownership,
+   * which is what the module's note privacy rests on.
+   */
+  get pages() {
+    return this.allPages.filter(page => page.visibleTo(this.world.user));
   }
 
   getFlag(scope, key) {
@@ -45,10 +89,37 @@ class StubEntry {
     return this;
   }
 
+  async createEmbeddedDocuments(type, data) {
+    return data.map(record => {
+      const page = new StubPage(this, { ...record, _id: `page${++this.world.nextPageId}` });
+      this.allPages.push(page);
+      return page;
+    });
+  }
+
+  async updateEmbeddedDocuments(type, updates) {
+    for (const update of updates) {
+      const page = this.allPages.find(candidate => candidate.id === update._id);
+      if (!page) continue;
+      if (update.name !== undefined) page.name = update.name;
+      if (update.text !== undefined) page.text = update.text;
+      if (update.ownership !== undefined) page.ownership = update.ownership;
+      // Flags merge by module scope, which is as deep as the service writes.
+      for (const [scope, value] of Object.entries(update.flags ?? {})) {
+        page.flags[scope] = { ...(page.flags[scope] ?? {}), ...value };
+      }
+    }
+    return updates;
+  }
+
+  async deleteEmbeddedDocuments(type, ids) {
+    this.allPages = this.allPages.filter(page => !ids.includes(page.id));
+    return ids;
+  }
+
   /** Whether a user would receive this document at all. */
   visibleTo(user) {
-    if (user.isGM) return true;
-    return (this.ownership[user.id] ?? this.ownership.default ?? LEVELS.NONE) > LEVELS.NONE;
+    return delivered(this.ownership, user);
   }
 }
 
@@ -114,14 +185,38 @@ export function installJournalWorld({ isGM = true, userId = "gm1" } = {}) {
   globalThis.ui = { notifications: { warn() {}, info() {}, error() {} } };
   globalThis.Hooks = { on() {}, once() {}, callAll() {} };
 
-  const world = { entries, settings };
+  const world = { entries, settings, user, nextPageId: 0 };
+  // Entries carried over from another client's world keep their own `world`;
+  // point them at this one so page delivery follows this client's user.
+  const adopt = () => {
+    for (const entry of entries) {
+      entry.world = world;
+      world.nextPageId = Math.max(world.nextPageId, entry.allPages.length);
+    }
+  };
+
+  // Resolves page and entry uuids the way the service builds them, honouring
+  // delivery: a page this client would never receive resolves to null.
+  const previousFromUuid = globalThis.fromUuid;
+  globalThis.fromUuid = async uuid => {
+    const [, entryId, , pageId] = String(uuid ?? "").split(".");
+    const entry = entries.find(candidate => candidate.id === entryId && candidate.visibleTo(user));
+    if (!entry) return null;
+    if (!pageId) return entry;
+    return entry.allPages.find(page => page.id === pageId && page.visibleTo(user)) ?? null;
+  };
 
   return {
     entries,
     settings,
     user,
+    world,
     /** Every entry in the world, including ones this client cannot see. */
     allEntries: () => entries,
+    /** Every page in the world, including ones this client cannot see. */
+    allPages: () => entries.flatMap(entry => entry.allPages),
+    /** Call after pushing another world's entries in, so delivery follows this user. */
+    adopt,
     restore() {
       globalThis.game = previous.game;
       globalThis.ui = previous.ui;
@@ -129,6 +224,7 @@ export function installJournalWorld({ isGM = true, userId = "gm1" } = {}) {
       globalThis.foundry = previous.foundry;
       globalThis.CONST = previous.CONST;
       globalThis.JournalEntry = previous.JournalEntry;
+      globalThis.fromUuid = previousFromUuid;
     }
   };
 }

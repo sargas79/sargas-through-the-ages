@@ -22,9 +22,9 @@
  */
 
 import { log, t } from "../compat.js";
-import { FLAGS, MODULE_ID, PARTY_ENTRY_NAME } from "../constants.js";
-import { ensureFolder, getFolder } from "./journal-service.js";
-import { isGM } from "./permission-service.js";
+import { FLAGS, MODULE_ID, PARTY_ENTRY_NAME, VISIBILITY } from "../constants.js";
+import { ensureFolder, getAllNotePages, getFolder } from "./journal-service.js";
+import { isGM, ownershipForVisibility } from "./permission-service.js";
 
 /** Every party store entry this client can see, keyed by party id. */
 export function getPartyEntries() {
@@ -143,15 +143,45 @@ export async function syncPartyEntry(party) {
   const entry = await ensurePartyEntry(party);
   if (!entry) return false;
 
+  const pagesChanged = await syncPartyNotePages(party);
+
   const changes = {};
   const wanted = partyOwnership(party);
   if (!sameOwnership(entry.ownership ?? {}, wanted)) changes.ownership = wanted;
   if (entry.name !== entryName(party)) changes.name = entryName(party);
-  if (!Object.keys(changes).length) return false;
+  if (!Object.keys(changes).length) return pagesChanged > 0;
 
   await entry.update(changes);
   log("debug", `Updated the store for party ${party.name}`, changes);
   return true;
+}
+
+/**
+ * Bring every note shared with a party into line with its members. GM only.
+ *
+ * A party note's page is delivered on its own ownership, which named the
+ * members as they were when it was written. Membership changes here, so the
+ * pages are brought along: a player who leaves the party stops receiving its
+ * notes, one who joins starts to.
+ * @returns {number} how many pages were changed
+ */
+export async function syncPartyNotePages(party) {
+  if (!isGM() || !party?.id) return 0;
+  const byEntry = new Map();
+  for (const { page, flags, entry } of getAllNotePages()) {
+    if (flags.visibility !== VISIBILITY.PARTY || flags.partyId !== party.id) continue;
+    const wanted = ownershipForVisibility(VISIBILITY.PARTY, flags.authorId, party.members);
+    if (sameOwnership(page.ownership ?? {}, wanted)) continue;
+    if (!byEntry.has(entry)) byEntry.set(entry, []);
+    byEntry.get(entry).push({ _id: page.id, ownership: wanted });
+  }
+  let changed = 0;
+  for (const [entry, updates] of byEntry) {
+    await entry.updateEmbeddedDocuments("JournalEntryPage", updates);
+    changed += updates.length;
+  }
+  if (changed) log("debug", `Updated ${changed} party note pages for ${party.name}`);
+  return changed;
 }
 
 /** Sync every party's entry. GM only. */

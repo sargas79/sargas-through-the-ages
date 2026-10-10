@@ -26,7 +26,8 @@
     "Visibility": {
       "gm-only": "GM only",
       "author-and-gm": "Author and GMs",
-      "players": "Visible to players"
+      "players": "Visible to players",
+      "party": "Party"
     },
     "Calendar": {
       "ControlTool": "Open the calendar",
@@ -106,17 +107,23 @@
       "TitleField": "Title",
       "TitlePlaceholder": "A short title for this note",
       "UnknownAuthor": "Unknown author",
-      "VisibilityField": "Visibility"
+      "VisibilityField": "Visibility",
+      "VisibilityParty": "Party: {name}"
     },
     "NoteEditor": {
+      "PartyField": "Party",
+      "PartyFieldHint": "Used when the visibility is Party.",
+      "ShareWithParty": "Share with my party ({name})",
       "PrivacyHintGM": "GM notes stay private unless you set them to be visible to players.",
       "PrivacyHintPlayer": "Your note is visible only to you and the Game Masters.",
+      "PrivacyHintPlayerParty": "Your note is visible to you and the Game Masters, or to your whole party if you share it.",
       "TitleEdit": "Edit Note",
       "TitleNew": "New Note"
     },
     "Filters": {
       "All": "All notes",
       "ByUser": "Notes by {name}",
+      "ByParty": "{name} party notes",
       "DayNotes": "Day notes",
       "GM": "GM notes",
       "Label": "Filter",
@@ -146,7 +153,7 @@
       "RemoveBody": "Remove the party \"{name}\"? Its members are no longer in any party and see the active party's date.",
       "RemoveActiveBody": "\"{name}\" is the active party. \"{next}\" becomes active when you save, and the campaign date moves to where it stands.",
       "RemoveLastBody": "\"{name}\" is the only party. Removing it turns parties off; the campaign date is kept.",
-      "RemoveMoveContent": "It has {events} timeline events. When you save, move them to:",
+      "RemoveMoveContent": "It has {events} timeline events and {notes} shared notes. When you save, move them to:",
       "RemoveMoveShared": "Shared (every party)",
       "ChooseParty": "Party shown",
       "ActiveSuffix": "{name} (active)",
@@ -461,6 +468,7 @@
       "StartupFailed": "Sargas Through the Ages could not complete its start-up checks. See the console for details.",
       "TimeGMOnly": "Only a Game Master can change the campaign date.",
       "PartyMissing": "That party no longer exists.",
+      "NotePartyDenied": "You can share a note only with your own party.",
       "TimeAdvanceFailed": "Foundry world time could not be advanced. The campaign calendar was not changed.",
       "TimeBusy": "A campaign time change is still being applied. Wait for it to finish before making another.",
       "TimeRaced": "Another Game Master changed the campaign date while this change was being applied, so it was discarded. Check the date before trying again.",
@@ -522,6 +530,7 @@
       "noteContentLength": "The note body is longer than the {max} character limit.",
       "noteScopeInvalid": "The note scope must be a day or a month.",
       "noteVisibilityInvalid": "The note visibility is not recognised.",
+      "notePartyMissing": "A party note needs a party.",
       "dateKeyInvalid": "\"{key}\" is not a valid date identifier.",
       "dateKeyScopeMismatch": "The date identifier \"{key}\" does not match the {scope} scope.",
       "dateKeyOutOfRange": "The date \"{key}\" falls outside the configured calendar.",

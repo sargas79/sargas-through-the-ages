@@ -485,8 +485,9 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
     // the party never silently removes what it recorded. Only a party the
     // world already knows can hold any; one added in this window has none.
     const events = timeline.countPartyEvents(id);
+    const notes = note.countPartyNotes(id);
     let moveTo = null;
-    if (events > 0) {
+    if (events + notes > 0) {
       const options = [
         html`<option value="">${t("TTA.Parties.RemoveMoveShared")}</option>`,
         ...remaining.map(p => html`<option value="${p.id}">${p.name}</option>`)
@@ -495,7 +496,7 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
         title: t("TTA.Parties.RemoveTitle"),
         content: html`<div class="tta-prompt">
           <p>${body}</p>
-          <label for="tta-party-move">${t("TTA.Parties.RemoveMoveContent", { events })}</label>
+          <label for="tta-party-move">${t("TTA.Parties.RemoveMoveContent", { events, notes })}</label>
           <select id="tta-party-move" name="moveTo">${trustedHTML(options)}</select>
         </div>`,
         okLabel: t("TTA.Common.Remove")
@@ -526,6 +527,7 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
   async #applyPartyRemovals() {
     for (const { id, moveTo } of this.partyRemovals) {
       await timeline.reassignPartyEvents(id, moveTo);
+      await note.reassignPartyNotes(id, moveTo);
       await partyStore.deletePartyEntry(id);
     }
     this.partyRemovals = [];

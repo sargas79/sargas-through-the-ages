@@ -13,7 +13,7 @@
  */
 
 import { log, t } from "../compat.js";
-import { FLAGS, MODULE_ID, NOTES_FOLDER_NAME, SETTINGS } from "../constants.js";
+import { FLAGS, MODULE_ID, NOTES_FOLDER_NAME, SETTINGS, VISIBILITY } from "../constants.js";
 import { compareDateKeys, parseKey } from "./date-service.js";
 import { migrateNoteFlags } from "./migration-service.js";
 import { isGM, ownershipForVisibility } from "./permission-service.js";
@@ -120,7 +120,7 @@ export function getNotePagesForKey(dateKey) {
  * Create a note page. GM only - player requests arrive here through the socket
  * relay once the requesting user has been validated.
  */
-export async function createNotePage({ dateKey, title, content, visibility, authorId, authorName }) {
+export async function createNotePage({ dateKey, title, content, visibility, partyId = null, partyMembers = [], authorId, authorName }) {
   const entry = await ensureEntryForKey(dateKey);
   if (!entry) throw new Error(t("TTA.Errors.NoFolder"));
 
@@ -130,7 +130,7 @@ export async function createNotePage({ dateKey, title, content, visibility, auth
     name: title,
     type: "text",
     text: { content: content ?? "", format: CONST.JOURNAL_ENTRY_PAGE_FORMATS.HTML },
-    ownership: ownershipForVisibility(visibility, authorId),
+    ownership: ownershipForVisibility(visibility, authorId, partyMembers),
     flags: {
       [MODULE_ID]: {
         [FLAGS.NOTE]: {
@@ -139,6 +139,7 @@ export async function createNotePage({ dateKey, title, content, visibility, auth
           authorId,
           authorName,
           visibility,
+          partyId: visibility === VISIBILITY.PARTY ? partyId : null,
           timelineEventId: null,
           createdAt: now,
           updatedAt: now
@@ -164,8 +165,14 @@ export function isManagedNotePage(page) {
   return !!folder && page.parent?.folder?.id === folder.id;
 }
 
-/** Apply an update to an existing note page. GM only. */
-export async function updateNotePage(pageUuid, { title, content, visibility }) {
+/**
+ * Apply an update to an existing note page. GM only.
+ *
+ * `partyMembers` is only read when the page ends up a party note, and the
+ * caller resolves it: this file knows which party a note names, not who is in
+ * it.
+ */
+export async function updateNotePage(pageUuid, { title, content, visibility, partyId, partyMembers = [] }) {
   const page = await fromUuid(pageUuid);
   if (!page) throw new Error(t("TTA.Errors.NoteMissing"));
   const flags = readNoteFlags(page);
@@ -179,12 +186,15 @@ export async function updateNotePage(pageUuid, { title, content, visibility }) {
   }
 
   const nextVisibility = visibility ?? flags.visibility;
-  if (visibility !== undefined && visibility !== flags.visibility) {
-    update.ownership = ownershipForVisibility(nextVisibility, flags.authorId);
+  const nextPartyId = nextVisibility === VISIBILITY.PARTY
+    ? (partyId === undefined ? flags.partyId : partyId) ?? null
+    : null;
+  if (nextVisibility !== flags.visibility || nextPartyId !== (flags.partyId ?? null)) {
+    update.ownership = ownershipForVisibility(nextVisibility, flags.authorId, partyMembers);
   }
   update.flags = {
     [MODULE_ID]: {
-      [FLAGS.NOTE]: { ...flags, visibility: nextVisibility, updatedAt: new Date().toISOString() }
+      [FLAGS.NOTE]: { ...flags, visibility: nextVisibility, partyId: nextPartyId, updatedAt: new Date().toISOString() }
     }
   };
 

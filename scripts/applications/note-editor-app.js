@@ -7,7 +7,7 @@
 
 import { createRichTextInput, log, t } from "../compat.js";
 import { MODULE_ID, SCOPE, VISIBILITY } from "../constants.js";
-import { formatDate, formatMonth, getCalendar } from "../services/calendar-service.js";
+import { formatDate, formatMonth, getCalendar, getParties, getPartyForUser } from "../services/calendar-service.js";
 import { parseKey } from "../services/date-service.js";
 import { createNote, defaultVisibilityFor, updateNote } from "../services/note-service.js";
 import { canChangeNoteVisibility, isGM } from "../services/permission-service.js";
@@ -62,6 +62,20 @@ export class NoteEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   async _prepareContext() {
     const gm = isGM();
+    const parties = getParties();
+    const ownParty = gm ? null : getPartyForUser();
+    const visibility = this.note?.visibility ?? defaultVisibilityFor();
+    const partyId = this.note?.partyId ?? null;
+    const visibilityChoices = [
+      { value: VISIBILITY.GM_ONLY, label: t(`TTA.Visibility.${VISIBILITY.GM_ONLY}`) },
+      { value: VISIBILITY.AUTHOR_AND_GM, label: t(`TTA.Visibility.${VISIBILITY.AUTHOR_AND_GM}`) },
+      { value: VISIBILITY.PLAYERS, label: t(`TTA.Visibility.${VISIBILITY.PLAYERS}`) }
+    ];
+    if (parties.length) visibilityChoices.push({ value: VISIBILITY.PARTY, label: t(`TTA.Visibility.${VISIBILITY.PARTY}`) });
+
+    let privacyHint = t("TTA.NoteEditor.PrivacyHintGM");
+    if (!gm) privacyHint = ownParty ? t("TTA.NoteEditor.PrivacyHintPlayerParty") : t("TTA.NoteEditor.PrivacyHintPlayer");
+
     return {
       note: this.note,
       dateKey: this.dateKey,
@@ -70,13 +84,15 @@ export class NoteEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
       isMonthNote: this.scope === SCOPE.MONTH,
       isGM: gm,
       canSetVisibility: canChangeNoteVisibility(),
-      visibility: this.note?.visibility ?? defaultVisibilityFor(),
-      visibilityChoices: [
-        { value: VISIBILITY.GM_ONLY, label: t(`TTA.Visibility.${VISIBILITY.GM_ONLY}`) },
-        { value: VISIBILITY.AUTHOR_AND_GM, label: t(`TTA.Visibility.${VISIBILITY.AUTHOR_AND_GM}`) },
-        { value: VISIBILITY.PLAYERS, label: t(`TTA.Visibility.${VISIBILITY.PLAYERS}`) }
-      ],
-      privacyHint: gm ? t("TTA.NoteEditor.PrivacyHintGM") : t("TTA.NoteEditor.PrivacyHintPlayer"),
+      visibility,
+      visibilityChoices,
+      // A GM picks the party for a party note; a player in a party gets one
+      // choice, which is to share the note with that party or not.
+      partyChoices: gm && parties.length
+        ? parties.map(party => ({ value: party.id, label: party.name, selected: party.id === partyId }))
+        : null,
+      shareWithParty: ownParty ? { name: ownParty.name, checked: visibility === VISIBILITY.PARTY } : null,
+      privacyHint,
       calendar: getCalendar()
     };
   }
@@ -99,12 +115,21 @@ export class NoteEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
    */
   static async onSubmit(event, form, formData) {
     const data = formData.object;
+    // A GM's visibility comes from the select; a player's from the share box,
+    // when they have a party to share with. The service re-checks both.
+    let visibility;
+    if (canChangeNoteVisibility()) visibility = data.visibility;
+    else if (data.shareWithParty !== undefined) {
+      visibility = data.shareWithParty === true || data.shareWithParty === "true" ? VISIBILITY.PARTY : VISIBILITY.AUTHOR_AND_GM;
+    }
+    const partyId = data.partyId || undefined;
     try {
       if (this.note) {
         await updateNote(this.note.uuid, {
           title: data.title,
           content: data.content,
-          visibility: canChangeNoteVisibility() ? data.visibility : undefined
+          visibility,
+          partyId
         });
         ui.notifications.info(t("TTA.Notifications.NoteUpdated"));
       } else {
@@ -112,7 +137,8 @@ export class NoteEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
           dateKey: this.dateKey,
           title: data.title,
           content: data.content,
-          visibility: data.visibility
+          visibility,
+          partyId
         });
         ui.notifications.info(t("TTA.Notifications.NoteCreated"));
       }

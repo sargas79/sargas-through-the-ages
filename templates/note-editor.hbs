@@ -18,14 +18,35 @@
   </div>
 
   {{#if canSetVisibility}}
-    <div class="tta-field">
-      <label for="tta-note-visibility">{{localize "TTA.Notes.VisibilityField"}}</label>
-      <select id="tta-note-visibility" name="visibility">
-        {{#each visibilityChoices}}
-          <option value="{{value}}" {{#if (ttaEq value ../visibility)}}selected{{/if}}>{{label}}</option>
-        {{/each}}
-      </select>
+    <div class="tta-field-grid">
+      <div class="tta-field">
+        <label for="tta-note-visibility">{{localize "TTA.Notes.VisibilityField"}}</label>
+        <select id="tta-note-visibility" name="visibility">
+          {{#each visibilityChoices}}
+            <option value="{{value}}" {{#if (ttaEq value ../visibility)}}selected{{/if}}>{{label}}</option>
+          {{/each}}
+        </select>
+      </div>
+      {{#if partyChoices}}
+        <div class="tta-field">
+          <label for="tta-note-party">{{localize "TTA.NoteEditor.PartyField"}}</label>
+          <select id="tta-note-party" name="partyId">
+            {{#each partyChoices}}
+              <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+            {{/each}}
+          </select>
+          <span class="tta-meta">{{localize "TTA.NoteEditor.PartyFieldHint"}}</span>
+        </div>
+      {{/if}}
     </div>
+  {{else if shareWithParty}}
+    {{!-- Unticked, the box still submits "false": a hidden input carries it, so
+          a player clearing the box can take a note back from their party. --}}
+    <input type="hidden" name="shareWithParty" value="false">
+    <label class="tta-checkbox">
+      <input type="checkbox" name="shareWithParty" value="true" {{#if shareWithParty.checked}}checked{{/if}}>
+      <span>{{localize "TTA.NoteEditor.ShareWithParty" name=shareWithParty.name}}</span>
+    </label>
   {{/if}}
 
   <p class="tta-hint">{{privacyHint}}</p>
