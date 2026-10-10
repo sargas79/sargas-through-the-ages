@@ -4,6 +4,10 @@ All notable changes to Sargas Through the Ages are documented here. The format f
 
 ## [Unreleased]
 
+### Added
+
+- **Parties**: the stored calendar now carries a list of parties, each a named group of players with its own date and clock, and an active-party pointer. Stored data moves to schema 6; a world that defines no parties is unchanged in every other respect.
+
 ### Changed
 
 - The module's display name is now Sargas Through the Ages, matching its id. Its id, settings and saved data are unchanged.

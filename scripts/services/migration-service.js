@@ -19,6 +19,7 @@ import {
 import { normalizeAge, sortAges } from "./age-service.js";
 import { compareDateKeys, daysInMonth, parseKey } from "./date-service.js";
 import { normalizeMoon, sortMoons } from "./moon-service.js";
+import { dedupeMembers, findParty, normalizeParty, sortParties } from "./party-service.js";
 
 function clampInt(value, min, max, fallback) {
   const n = Math.trunc(Number(value));
@@ -118,6 +119,12 @@ export function migrateCalendarData(data) {
   const ages = sortAges((Array.isArray(source.ages) ? source.ages : []).map((age, i) => normalizeAge(age, i)))
     .map((age, i) => ({ ...age, sortOrder: i }));
 
+  const shape = { monthsPerYear, monthLengths, daysPerMonth };
+  const parties = migrateParties(source.parties, shape);
+  // An active id that names no party is a stale pointer, and a world with no
+  // parties has nothing to be active: both read as "no active party".
+  const activePartyId = findParty(parties, source.activePartyId)?.id ?? null;
+
   return {
     schemaVersion: SCHEMA_VERSION,
     calendar: {
@@ -133,8 +140,39 @@ export function migrateCalendarData(data) {
       yearSuffix: normalizeYearAffix(calendar.yearSuffix),
       moons
     },
-    ages
+    ages,
+    parties,
+    activePartyId
   };
+}
+
+/**
+ * Normalise the stored party list: drop unusable entries, clamp each party's
+ * date to the calendar it is stored with, keep every user in only one party,
+ * and cap the list at the supported maximum.
+ *
+ * Worlds written before parties existed have no list, so this returns `[]`
+ * for them and every party-aware code path takes its "no parties" branch.
+ */
+export function migrateParties(parties, shape) {
+  const source = Array.isArray(parties) ? parties : [];
+  const normalized = source
+    .filter(party => party && typeof party === "object")
+    .map((party, i) => normalizeParty(party, i))
+    .map(party => {
+      const month = clampInt(party.currentDate.month, 1, shape.monthsPerYear, 1);
+      return {
+        ...party,
+        currentDate: {
+          year: party.currentDate.year,
+          month,
+          day: clampInt(party.currentDate.day, 1, daysInMonth(month, shape), 1)
+        }
+      };
+    });
+  return sortParties(dedupeMembers(normalized))
+    .slice(0, LIMITS.PARTIES_MAX)
+    .map((party, i) => ({ ...party, sortOrder: i }));
 }
 
 /**

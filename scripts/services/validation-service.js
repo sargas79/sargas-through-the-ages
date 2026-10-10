@@ -9,6 +9,7 @@
 import { LIMITS, MOON_PHASE_COUNTS, SCOPE, VISIBILITY } from "../constants.js";
 import { endYear, findGaps, findOverlaps } from "./age-service.js";
 import { daysInMonth, isValidDate, maxDaysInMonth, monthLengths, parseKey } from "./date-service.js";
+import { findDuplicateMembers, findParty } from "./party-service.js";
 
 function issue(code, data = {}) {
   return { code, data };
@@ -117,6 +118,74 @@ export function validateCalendarData(data) {
   const ageResult = validateAges(data?.ages ?? []);
   errors.push(...ageResult.errors);
   warnings.push(...ageResult.warnings);
+
+  // Data written before parties existed carries no list at all, and that is
+  // not the same as carrying a broken one.
+  if (data?.parties !== undefined || data?.activePartyId !== undefined) {
+    const partyResult = validateParties(data?.parties ?? [], data?.activePartyId ?? null, calendar);
+    errors.push(...partyResult.errors);
+    warnings.push(...partyResult.warnings);
+  }
+
+  return { valid: errors.length === 0, errors, warnings };
+}
+
+/**
+ * Validate a party list and the active party pointer.
+ *
+ * `calendar` is optional; when given, each party's date must fit it. Every
+ * party's date is checked, not only the active one's, because a party that is
+ * not active still has its date read whenever one of its members opens the
+ * calendar.
+ * @returns {{valid:boolean, errors:Array, warnings:Array}}
+ */
+export function validateParties(parties = [], activePartyId = null, calendar = null) {
+  const errors = [];
+  const warnings = [];
+
+  if (!Array.isArray(parties)) {
+    errors.push(issue("partyListInvalid"));
+    return { valid: false, errors, warnings };
+  }
+
+  if (parties.length > LIMITS.PARTIES_MAX) {
+    errors.push(issue("partyCount", { max: LIMITS.PARTIES_MAX, actual: parties.length }));
+  }
+
+  for (const party of parties) {
+    const name = String(party?.name ?? "").trim();
+    if (!name) errors.push(issue("partyNameEmpty"));
+    if (name.length > LIMITS.PARTY_NAME_MAX) {
+      errors.push(issue("partyNameLength", { name, max: LIMITS.PARTY_NAME_MAX, actual: name.length }));
+    }
+    if (!Array.isArray(party?.members)) errors.push(issue("partyMembersInvalid", { name }));
+
+    const date = party?.currentDate;
+    if (!Number.isInteger(Number(date?.year)) || Number(date?.year) < LIMITS.YEAR_MIN) {
+      errors.push(issue("partyDateInvalid", { name }));
+    } else if (calendar) {
+      const probe = { year: Number(date.year), month: Number(date.month), day: Number(date.day) };
+      if (!isValidDate(probe, calendar)) errors.push(issue("partyDateOutOfRange", { name }));
+    }
+    const time = party?.currentTime ?? { hour: 0, minute: 0 };
+    if (!isIntegerInRange(time.hour, 0, 23) || !isIntegerInRange(time.minute, 0, 59)) {
+      errors.push(issue("partyTimeInvalid", { name }));
+    }
+  }
+
+  const dupeIds = duplicates(parties.map(party => party?.id).filter(Boolean));
+  if (dupeIds.length) errors.push(issue("partyIdDuplicate", { ids: dupeIds.join(", ") }));
+  const dupeNames = duplicates(parties.map(party => party?.name).filter(name => String(name ?? "").trim()));
+  if (dupeNames.length) errors.push(issue("partyNameDuplicate", { names: dupeNames.join(", ") }));
+
+  for (const { userId, keptBy, droppedFrom } of findDuplicateMembers(parties)) {
+    errors.push(issue("partyMemberDuplicate", { userId, a: keptBy.name, b: droppedFrom.name }));
+  }
+
+  // The pointer and the list agree: no parties means no active party, and any
+  // parties at all means exactly one of them is active.
+  if (parties.length === 0 && activePartyId) errors.push(issue("partyActiveWithoutParties"));
+  if (parties.length > 0 && !findParty(parties, activePartyId)) errors.push(issue("partyActiveMissing"));
 
   return { valid: errors.length === 0, errors, warnings };
 }

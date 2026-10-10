@@ -8,7 +8,7 @@ export const MODULE_ID = "sargas-through-the-ages";
 /** The id used before 3.0.0. Data stored under it is copied over on start-up. */
 export const LEGACY_MODULE_ID = "through-the-ages";
 export const MODULE_TITLE = "Sargas Through the Ages";
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export const NOTES_FOLDER_NAME = "Calendar Notes";
 
@@ -126,7 +126,14 @@ export const LIMITS = {
   MOONS_MAX: 12,
   MOON_CYCLE_MIN: 2,
   MOON_CYCLE_MAX: 1000,
-  YEAR_AFFIX_MAX: 12
+  YEAR_AFFIX_MAX: 12,
+  /**
+   * Party bounds. A party is one group of players at one point in the world's
+   * history; a table rarely runs more than two or three, and every party costs
+   * a journal entry and a date to keep in step.
+   */
+  PARTIES_MAX: 8,
+  PARTY_NAME_MAX: 60
 };
 
 /**
@@ -188,7 +195,15 @@ export const DEFAULT_CALENDAR_DATA = {
     yearSuffix: "",
     moons: []
   },
-  ages: []
+  ages: [],
+  /**
+   * Parties: groups of players that each stand at their own point in the
+   * world's history. The list is empty for a world that does not use them, and
+   * every code path then behaves as it did before parties existed. See
+   * `party-service.js`.
+   */
+  parties: [],
+  activePartyId: null
 };
 
 /** Default accent colour applied to Ages and events that define none. */
