@@ -421,6 +421,7 @@
       "RequestTimedOut": "No Game Master responded in time. Please try again.",
       "StartupFailed": "Sargas Through the Ages could not complete its start-up checks. See the console for details.",
       "TimeGMOnly": "Only a Game Master can change the campaign date.",
+      "PartyMissing": "That party no longer exists.",
       "TimeAdvanceFailed": "Foundry world time could not be advanced. The campaign calendar was not changed.",
       "TimeBusy": "A campaign time change is still being applied. Wait for it to finish before making another.",
       "TimeRaced": "Another Game Master changed the campaign date while this change was being applied, so it was discarded. Check the date before trying again.",

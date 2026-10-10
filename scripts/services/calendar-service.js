@@ -23,6 +23,7 @@ import {
 } from "./date-service.js";
 import { describePhase, sortMoons, visibleMoons } from "./moon-service.js";
 import { migrateCalendarData, migrateEvents, needsMigration } from "./migration-service.js";
+import { findParty, partyForUser, partyMoment, sortParties } from "./party-service.js";
 import { canChangeTime, canConfigureCalendar, isGM } from "./permission-service.js";
 import { ensurePrivateEntry, readPrivate, writePrivate } from "./private-store-service.js";
 
@@ -47,7 +48,13 @@ export function getCalendar() {
   return getData().calendar;
 }
 
-/** The shared current date. */
+/**
+ * The shared current date: the active party's, when parties are in use.
+ *
+ * This is "now" for the world as a whole, and for Foundry's world time. A
+ * player in a party that is not active stands somewhere else; see
+ * {@link getViewerDate}.
+ */
 export function getCurrentDate() {
   return getCalendar().currentDate;
 }
@@ -55,6 +62,99 @@ export function getCurrentDate() {
 /** The shared campaign clock, stored to minute precision. */
 export function getCurrentTime() {
   return getCalendar().currentTime;
+}
+
+// --- Parties ---------------------------------------------------------------
+
+/** Every party, ordered. Empty for a world that does not use parties. */
+export function getParties() {
+  return sortParties(getData().parties ?? []);
+}
+
+/** The id of the party whose date the calendar is standing on, or null. */
+export function getActivePartyId() {
+  return getData().activePartyId ?? null;
+}
+
+/** The active party record, or null. */
+export function getActiveParty() {
+  return findParty(getParties(), getActivePartyId());
+}
+
+/** One party by id, or null. */
+export function getParty(partyId) {
+  return findParty(getParties(), partyId);
+}
+
+/** The party a user belongs to, or null. GMs belong to none. */
+export function getPartyForUser(user = game.user) {
+  return partyForUser(getParties(), user?.id);
+}
+
+/**
+ * The date and time a party stands at.
+ *
+ * The active party's moment is the calendar's own; any other party's is on
+ * its record. With no parties, or an unknown id, this is the calendar's moment.
+ * @returns {{date:object, time:object}}
+ */
+export function getPartyMoment(partyId) {
+  const data = getData();
+  return partyMoment(data.calendar, data.parties ?? [], data.activePartyId, partyId);
+}
+
+/** The date a party stands at. */
+export function getPartyDate(partyId) {
+  return getPartyMoment(partyId).date;
+}
+
+/** The clock a party stands at. */
+export function getPartyTime(partyId) {
+  return getPartyMoment(partyId).time;
+}
+
+/**
+ * The moment a user should be shown: their own party's, else the active
+ * party's (which, with no parties, is simply the campaign date).
+ * @returns {{date:object, time:object}}
+ */
+export function getViewerMoment(user = game.user) {
+  return getPartyMoment(getPartyForUser(user)?.id ?? null);
+}
+
+/** The date a user should be shown. */
+export function getViewerDate(user = game.user) {
+  return getViewerMoment(user).date;
+}
+
+/** The clock a user should be shown. */
+export function getViewerTime(user = game.user) {
+  return getViewerMoment(user).time;
+}
+
+/**
+ * Resolve which party a time change is for.
+ *
+ * `null` means the active party, which is also what an unknown id or a world
+ * without parties resolves to, so callers written before parties existed keep
+ * moving the campaign date. Returns the party record for a non-active party.
+ * @returns {{party:object|null, isActive:boolean}}
+ */
+function resolveTargetParty(data, partyId) {
+  const party = findParty(data.parties ?? [], partyId);
+  if (!party || party.id === data.activePartyId) return { party: null, isActive: true };
+  return { party, isActive: false };
+}
+
+/**
+ * The shared half of a payload, ready to be written to the world setting.
+ *
+ * `getData` merges the hidden Ages back in for a GM. Writing that whole would
+ * put them straight back into the world setting every client reads, so only
+ * the player-visible Ages go back.
+ */
+function sharedPayload(data) {
+  return { ...data, ages: data.ages.filter(age => age.playerVisible !== false) };
 }
 
 /** Every configured moon, ordered. */
@@ -180,8 +280,8 @@ export async function saveAges(ages) {
  * Set the shared campaign date. Out-of-range values are clamped.
  * @returns {object|null} the applied date, or null when the change was refused
  */
-export async function setCurrentDate(date) {
-  const applied = await setCurrentDateTime(date, getCurrentTime());
+export async function setCurrentDate(date, { partyId = null } = {}) {
+  const applied = await setCurrentDateTime(date, getPartyTime(partyId), { partyId });
   return applied?.date ?? null;
 }
 
@@ -199,15 +299,26 @@ export const TIME_CHANGE_REASON = Object.freeze({
  * Set the shared campaign date and time. Out-of-range values are clamped.
  *
  * Emits `sargas-through-the-ages.timeChanged` with
- * `{ date, time, previous: { date, time }, elapsedSeconds, reason }` on this
- * client, then `sargas-through-the-ages.dateChanged` with the date alone.
+ * `{ date, time, previous: { date, time }, elapsedSeconds, reason, partyId }`
+ * on this client, then `sargas-through-the-ages.dateChanged` with the date
+ * alone. `partyId` is the active party's id, or null without parties.
+ *
+ * With `partyId` naming a party that is not active, only that party's own
+ * record moves. The campaign date, Foundry world time and the two hooks above
+ * are untouched: a listener that treats `timeChanged` as time passing would
+ * otherwise run its clocks for a group that is not at the table. Such a change
+ * emits `sargas-through-the-ages.partyTimeChanged` instead, with the same
+ * payload shape.
  */
-export async function setCurrentDateTime(date, time, { reason = TIME_CHANGE_REASON.SET } = {}) {
+export async function setCurrentDateTime(date, time, { reason = TIME_CHANGE_REASON.SET, partyId = null } = {}) {
   if (!canChangeTime()) {
     ui.notifications.warn(t("TTA.Errors.TimeGMOnly"));
     return null;
   }
   const data = getData();
+  const { party, isActive } = resolveTargetParty(data, partyId);
+  if (!isActive) return setPartyMoment(data, party, date, time, reason);
+
   const calendar = data.calendar;
   const target = isValidDate(date, calendar) ? date : clampDate(date, calendar);
   if (!isValidDate(date, calendar)) log("warn", "Requested date was out of range and has been clamped", date, target);
@@ -215,14 +326,10 @@ export async function setCurrentDateTime(date, time, { reason = TIME_CHANGE_REAS
   const targetTime = clampTime(time);
   const previous = { date: calendar.currentDate, time: calendar.currentTime };
   const elapsedSeconds = campaignSeconds(target, targetTime, calendar) - campaignSeconds(previous.date, previous.time, calendar);
-  // `data` came from `getData`, which merged the hidden Ages back in for a GM.
-  // Writing it whole would put them straight back into the world setting every
-  // client reads, so only the shared half goes back.
-  const updated = {
+  const updated = sharedPayload({
     ...data,
-    ages: data.ages.filter(age => age.playerVisible !== false),
     calendar: { ...calendar, currentDate: target, currentTime: targetTime }
-  };
+  });
   // Every campaign-date move passes through here, so this is the one place that
   // can answer "what moved the date, and who asked for it" after the fact. The
   // stack is only worth collecting when someone is actually reading the log.
@@ -237,43 +344,138 @@ export async function setCurrentDateTime(date, time, { reason = TIME_CHANGE_REAS
     });
   }
   await game.settings.set(MODULE_ID, SETTINGS.CALENDAR_DATA, updated);
-  Hooks.callAll(`${MODULE_ID}.timeChanged`, { date: target, time: targetTime, previous, elapsedSeconds, reason });
+  Hooks.callAll(`${MODULE_ID}.timeChanged`, {
+    date: target,
+    time: targetTime,
+    previous,
+    elapsedSeconds,
+    reason,
+    partyId: data.activePartyId ?? null
+  });
   Hooks.callAll(`${MODULE_ID}.dateChanged`, target);
   return { date: target, time: targetTime };
 }
 
-/** Advance (or rewind) the campaign date by whole days. GM only. */
-export async function advanceDays(delta) {
-  const result = await advanceTime(Math.trunc(delta) * 86400, { reason: TIME_CHANGE_REASON.ADVANCE });
+/**
+ * Move a party that is not active. Only its record changes; see
+ * {@link setCurrentDateTime} for why the campaign hooks stay quiet.
+ */
+async function setPartyMoment(data, party, date, time, reason) {
+  const calendar = data.calendar;
+  const target = isValidDate(date, calendar) ? date : clampDate(date, calendar);
+  if (!isValidDate(date, calendar)) log("warn", "Requested party date was out of range and has been clamped", date, target);
+  const targetTime = clampTime(time);
+  const previous = { date: party.currentDate, time: party.currentTime };
+  const elapsedSeconds = campaignSeconds(target, targetTime, calendar) - campaignSeconds(previous.date, previous.time, calendar);
+
+  const parties = data.parties.map(record => record.id === party.id
+    ? { ...record, currentDate: target, currentTime: targetTime }
+    : record);
+  await game.settings.set(MODULE_ID, SETTINGS.CALENDAR_DATA, sharedPayload({ ...data, parties }));
+  log("debug", "Party date set", { party: party.id, from: previous, to: { date: target, time: targetTime }, reason });
+  Hooks.callAll(`${MODULE_ID}.partyTimeChanged`, {
+    date: target,
+    time: targetTime,
+    previous,
+    elapsedSeconds,
+    reason,
+    partyId: party.id
+  });
+  return { date: target, time: targetTime };
+}
+
+/** Advance (or rewind) a party's date by whole days. GM only. */
+export async function advanceDays(delta, { partyId = null } = {}) {
+  const result = await advanceTime(Math.trunc(delta) * 86400, { reason: TIME_CHANGE_REASON.ADVANCE, partyId });
   return result?.date ?? null;
 }
 
-/** Advance (or rewind) the campaign date by whole months. GM only. */
-export async function advanceMonths(delta) {
+/** Advance (or rewind) a party's date by whole months. GM only. */
+export async function advanceMonths(delta, { partyId = null } = {}) {
   const calendar = getCalendar();
-  const target = addMonths(calendar.currentDate, delta, calendar);
-  const result = await advanceTo(target, calendar.currentTime, { reason: TIME_CHANGE_REASON.ADVANCE });
+  const moment = getPartyMoment(partyId);
+  const target = addMonths(moment.date, delta, calendar);
+  const result = await advanceTo(target, moment.time, { reason: TIME_CHANGE_REASON.ADVANCE, partyId });
   return result?.date ?? null;
 }
 
-/** Advance (or rewind) the campaign date by whole years. GM only. */
-export async function advanceYears(delta) {
+/** Advance (or rewind) a party's date by whole years. GM only. */
+export async function advanceYears(delta, { partyId = null } = {}) {
   const calendar = getCalendar();
-  const target = addYears(calendar.currentDate, delta, calendar);
-  const result = await advanceTo(target, calendar.currentTime, { reason: TIME_CHANGE_REASON.ADVANCE });
+  const moment = getPartyMoment(partyId);
+  const target = addYears(moment.date, delta, calendar);
+  const result = await advanceTo(target, moment.time, { reason: TIME_CHANGE_REASON.ADVANCE, partyId });
   return result?.date ?? null;
 }
 
-/** Advance the campaign by exact elapsed seconds through Foundry's world clock. */
-export async function advanceTime(seconds, { reason = TIME_CHANGE_REASON.ADVANCE } = {}) {
+/**
+ * Advance a party by exact elapsed seconds. For the active party this goes
+ * through Foundry's world clock; for any other it is arithmetic on its record.
+ */
+export async function advanceTime(seconds, { reason = TIME_CHANGE_REASON.ADVANCE, partyId = null } = {}) {
   const calendar = getCalendar();
-  const target = addSeconds(calendar.currentDate, calendar.currentTime, seconds, calendar);
-  return advanceTo(target.date, target.time, { reason });
+  const moment = getPartyMoment(partyId);
+  const target = addSeconds(moment.date, moment.time, seconds, calendar);
+  return advanceTo(target.date, target.time, { reason, partyId });
 }
 
-/** Advance to 07:00 on the following campaign day. */
-export async function advanceToNextAdventureDay() {
-  return advanceTime(secondsUntilNextAdventureDay(getCurrentTime()), { reason: TIME_CHANGE_REASON.NEXT_ADVENTURE_DAY });
+/** Advance a party to 07:00 on its following campaign day. */
+export async function advanceToNextAdventureDay({ partyId = null } = {}) {
+  return advanceTime(secondsUntilNextAdventureDay(getPartyTime(partyId)), {
+    reason: TIME_CHANGE_REASON.NEXT_ADVENTURE_DAY,
+    partyId
+  });
+}
+
+/**
+ * Make a party the one the calendar stands on. GM only.
+ *
+ * The outgoing party's date is written to its record and the incoming party's
+ * date is loaded into the calendar, in one write. Foundry world time is left
+ * exactly where it is: a switch is not time passing, so it does not fire
+ * `timeChanged`, and a companion module must not treat it as an advance. It
+ * fires `sargas-through-the-ages.activePartyChanged` with
+ * `{ partyId, previousPartyId }` instead.
+ *
+ * @returns {object|null} the now-active party, or null when the switch was refused
+ */
+export async function setActiveParty(partyId) {
+  if (!canChangeTime()) {
+    ui.notifications.warn(t("TTA.Errors.TimeGMOnly"));
+    return null;
+  }
+  // The advance's race guard would discard the advance anyway once the date
+  // moved under it, but refusing here spares the GM a confusing pair of toasts.
+  if (advanceInFlight) {
+    ui.notifications.warn(t("TTA.Errors.TimeBusy"));
+    return null;
+  }
+  const data = getData();
+  const incoming = findParty(data.parties ?? [], partyId);
+  if (!incoming) {
+    ui.notifications.warn(t("TTA.Errors.PartyMissing"));
+    return null;
+  }
+  const previousPartyId = data.activePartyId ?? null;
+  if (incoming.id === previousPartyId) return incoming;
+
+  const calendar = data.calendar;
+  const parties = data.parties.map(record => {
+    if (record.id === previousPartyId) {
+      return { ...record, currentDate: calendar.currentDate, currentTime: calendar.currentTime };
+    }
+    return record;
+  });
+  const updated = sharedPayload({
+    ...data,
+    parties,
+    activePartyId: incoming.id,
+    calendar: { ...calendar, currentDate: incoming.currentDate, currentTime: incoming.currentTime }
+  });
+  await game.settings.set(MODULE_ID, SETTINGS.CALENDAR_DATA, updated);
+  log("info", `Active party is now ${incoming.name}`, { partyId: incoming.id, previousPartyId });
+  Hooks.callAll(`${MODULE_ID}.activePartyChanged`, { partyId: incoming.id, previousPartyId });
+  return findParty(parties, incoming.id);
 }
 
 /** True when two stored date/time pairs describe the same campaign moment. */
@@ -301,10 +503,15 @@ let advanceInFlight = false;
  * `reason` is carried onto the `timeChanged` payload; a direct call is a
  * deliberate "set" unless the caller says otherwise.
  */
-export async function advanceTo(date, time, { reason = TIME_CHANGE_REASON.SET } = {}) {
+export async function advanceTo(date, time, { reason = TIME_CHANGE_REASON.SET, partyId = null } = {}) {
   if (!canChangeTime()) {
     ui.notifications.warn(t("TTA.Errors.TimeGMOnly"));
     return null;
+  }
+  // A party that is not active has no claim on Foundry world time, so its
+  // advance is a plain write to its record and needs none of the machinery below.
+  if (!resolveTargetParty(getData(), partyId).isActive) {
+    return setCurrentDateTime(date, time, { reason, partyId });
   }
   if (advanceInFlight) {
     log("warn", "Ignored a time change while another was still in flight", date, time);

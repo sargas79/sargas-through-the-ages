@@ -7,6 +7,7 @@ All notable changes to Sargas Through the Ages are documented here. The format f
 ### Added
 
 - **Parties**: the stored calendar now carries a list of parties, each a named group of players with its own date and clock, and an active-party pointer. Stored data moves to schema 6; a world that defines no parties is unchanged in every other respect.
+- Every date and time operation (`setCurrentDateTime`, `advanceTime`, `advanceDays` and the rest) takes an optional `partyId`. The active party's changes go through Foundry world time as before; another party's change moves only that party's record and fires `sargas-through-the-ages.partyTimeChanged` rather than `timeChanged`, so companion modules never mistake it for time passing at the table. `setActiveParty` swaps which party the calendar stands on, in one write, without touching world time, and fires `sargas-through-the-ages.activePartyChanged`. The `timeChanged` payload gains `partyId`.
 
 ### Changed
 
