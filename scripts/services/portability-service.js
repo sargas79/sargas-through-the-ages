@@ -2,10 +2,12 @@
  * Export and import of the shared calendar as a plain JSON file.
  *
  * The payload covers everything the configuration window owns: the calendar
- * structure, its moons, the Age list, and optionally the timeline events.
- * Journal-backed notes are deliberately excluded — they are ordinary
- * `JournalEntryPage` documents that Foundry's own import/export already
- * handles, and duplicating them here would risk orphaned or doubled pages.
+ * structure, its moons, the Age list, the parties (without their members, who
+ * are user ids that mean nothing in another world), and optionally the
+ * timeline events. Journal-backed notes are deliberately excluded — they are
+ * ordinary `JournalEntryPage` documents that Foundry's own import/export
+ * already handles, and duplicating them here would risk orphaned or doubled
+ * pages.
  *
  * The pure builders and parsers below take explicit data so they can be unit
  * tested; only `downloadExport` and `readImportFile` touch the browser.
@@ -28,12 +30,14 @@ import { validateCalendarData } from "./validation-service.js";
 export function buildExportPayload({
   calendar,
   ages = [],
+  parties = [],
+  activePartyId = null,
   events = null,
   moduleVersion = "",
   worldTitle = "",
   exportedAt = new Date().toISOString()
 }) {
-  const normalized = migrateCalendarData({ calendar, ages });
+  const normalized = migrateCalendarData({ calendar, ages, parties, activePartyId });
   const payload = {
     format: EXPORT_FORMAT,
     formatVersion: EXPORT_FORMAT_VERSION,
@@ -44,6 +48,12 @@ export function buildExportPayload({
     calendar: normalized.calendar,
     ages: normalized.ages
   };
+  // Members are this world's user ids; the file carries the parties as groups
+  // with a date, and the importing GM assigns their own players.
+  if (normalized.parties.length) {
+    payload.parties = normalized.parties.map(party => ({ ...party, members: [] }));
+    payload.activePartyId = normalized.activePartyId;
+  }
   if (Array.isArray(events)) payload.events = migrateEvents(events);
   return payload;
 }
@@ -54,6 +64,8 @@ export function buildExport({ includeEvents = true } = {}) {
   return buildExportPayload({
     calendar: data.calendar,
     ages: data.ages,
+    parties: data.parties,
+    activePartyId: data.activePartyId,
     events: includeEvents ? getEvents() : null,
     moduleVersion: game.modules.get(MODULE_ID)?.version ?? "",
     worldTitle: game.world?.title ?? ""
@@ -100,16 +112,23 @@ export function parseImport(text) {
   }
   if (!raw.calendar || typeof raw.calendar !== "object") return fail("importMissingCalendar");
 
-  const data = migrateCalendarData({ calendar: raw.calendar, ages: raw.ages });
+  // Whatever members a file names belong to the world it came from, so the
+  // parties arrive empty and the GM is told to fill them.
+  const hasParties = Array.isArray(raw.parties) && raw.parties.length > 0;
+  const parties = hasParties ? raw.parties.map(party => ({ ...party, members: [] })) : [];
+  const data = migrateCalendarData({ calendar: raw.calendar, ages: raw.ages, parties, activePartyId: raw.activePartyId });
   const events = Array.isArray(raw.events) ? migrateEvents(raw.events) : null;
   const validation = validateCalendarData(data);
+  const warnings = [...validation.warnings];
+  if (hasParties) warnings.push({ code: "importPartiesNeedMembers", data: { count: data.parties.length } });
 
   return {
     ok: validation.valid,
     data,
     events,
+    hasParties,
     errors: validation.errors,
-    warnings: validation.warnings
+    warnings
   };
 }
 
@@ -125,6 +144,7 @@ export function summarizeImport(parsed, current) {
     weekdays: { from: now.weekdayNames?.length ?? 0, to: next.weekdayNames?.length ?? 0 },
     moons: { from: now.moons?.length ?? 0, to: next.moons?.length ?? 0 },
     ages: { from: current?.ages?.length ?? 0, to: parsed?.data?.ages?.length ?? 0 },
+    parties: { from: current?.parties?.length ?? 0, to: parsed?.data?.parties?.length ?? 0 },
     events: parsed?.events?.length ?? null,
     currentDate: next.currentDate ?? null
   };

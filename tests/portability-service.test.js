@@ -161,6 +161,53 @@ describe("summarizeImport", () => {
   });
 });
 
+describe("parties in an export", () => {
+  const parties = [
+    { id: "a", name: "North", members: ["u1", "u2"], currentDate: { year: 5, month: 3, day: 12 }, currentTime: { hour: 9, minute: 30 }, sortOrder: 0 },
+    { id: "b", name: "South", members: ["u3"], currentDate: { year: 7, month: 1, day: 1 }, currentTime: { hour: 0, minute: 0 }, sortOrder: 1 }
+  ];
+
+  it("are written without their members, with the active party", () => {
+    const payload = buildExportPayload({ calendar, ages, parties, activePartyId: "b" });
+    assert.deepEqual(payload.parties.map(party => party.members), [[], []]);
+    assert.deepEqual(payload.parties.map(party => party.name), ["North", "South"]);
+    assert.equal(payload.activePartyId, "b");
+    assert.equal(JSON.stringify(payload).includes("u1"), false);
+  });
+
+  it("are left out of the envelope when the world has none", () => {
+    const payload = buildExportPayload({ calendar, ages });
+    assert.equal("parties" in payload, false);
+    assert.equal("activePartyId" in payload, false);
+  });
+
+  it("come back empty on import, with a warning to assign members", () => {
+    const text = JSON.stringify(buildExportPayload({ calendar, ages, parties, activePartyId: "b" }));
+    const parsed = parseImport(text);
+    assert.ok(parsed.ok);
+    assert.equal(parsed.hasParties, true);
+    assert.deepEqual(parsed.data.parties.map(party => party.members), [[], []]);
+    assert.equal(parsed.data.activePartyId, "b");
+    assert.deepEqual(parsed.data.parties[1].currentDate, { year: 7, month: 1, day: 1 });
+    assert.ok(parsed.warnings.some(warning => warning.code === "importPartiesNeedMembers" && warning.data.count === 2));
+    assert.deepEqual(summarizeImport(parsed, migrateCalendarData(DEFAULT_CALENDAR_DATA)).parties, { from: 0, to: 2 });
+  });
+
+  it("drop members a hand-edited file tries to smuggle in", () => {
+    const raw = buildExportPayload({ calendar, ages, parties, activePartyId: "a" });
+    raw.parties[0].members = ["someone"];
+    assert.deepEqual(parseImport(JSON.stringify(raw)).data.parties[0].members, []);
+  });
+
+  it("read an older file with no parties as a world without them", () => {
+    const parsed = parseImport(exportText());
+    assert.equal(parsed.hasParties, false);
+    assert.deepEqual(parsed.data.parties, []);
+    assert.equal(parsed.data.activePartyId, null);
+    assert.ok(!parsed.warnings.some(warning => warning.code === "importPartiesNeedMembers"));
+  });
+});
+
 describe("exportFilename", () => {
   it("builds a dated, slug-safe filename", () => {
     const name = exportFilename("My World!", new Date("2026-08-18T10:00:00Z"));

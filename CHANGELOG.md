@@ -11,6 +11,7 @@ All notable changes to Sargas Through the Ages are documented here. The format f
 
 - A **Parties** section in the configuration window: add, name, colour and order parties, pick their members from the world's players, and choose the active party. The calendar stands on the active party's date for everyone and moves only when a GM switches the active party from the calendar header; the header names the active party, and a GM also sees where the other parties stand on the month grid.
 - Notes can be shared with a party: a new *Party* visibility whose page only the author, the party's members and the GMs receive. A player in a party gets a *Share with my party* box in the note editor — the one visibility change a player may make, and only for their own party, re-checked on the GM's side. Membership changes update the pages; removing a party moves its notes with its events.
+- The calendar export carries the parties (without their members) and the active party; an import that defines parties brings them in empty and says so. The API gains `getParties`, `getParty`, `getActiveParty`, `getActivePartyId`, `getPartyForUser`, `getPartyDate`, `getPartyTime`, `setActiveParty` and `utils.partyForUser`.
 - Timeline events can belong to a party. A party's player-visible events are stored in a journal entry only its members and the GMs receive, so the other party never has them; the event editor gains a *Party* field, the timeline a filter per party, and event cards a party tag. Removing a party asks where its events go.
 
 ### Changed

@@ -768,6 +768,8 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
     const payload = portability.buildExportPayload({
       calendar: this.draft.calendar,
       ages: this.draft.ages,
+      parties: this.draft.parties,
+      activePartyId: this.draft.activePartyId,
       events: includeEvents ? timeline.getEvents() : null,
       moduleVersion: game.modules.get(MODULE_ID)?.version ?? "",
       worldTitle: game.world?.title ?? ""
@@ -811,6 +813,7 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
       t("TTA.Import.RowMoons", summary.moons),
       t("TTA.Import.RowAges", summary.ages)
     ];
+    if (parsed.hasParties) rows.push(t("TTA.Import.RowParties", summary.parties));
     if (summary.events !== null) rows.push(t("TTA.Import.RowEvents", { count: summary.events }));
 
     // Every string below is out of the imported file: the validation messages
@@ -832,8 +835,12 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
     });
     if (!confirmed) return;
 
-    // The file describes a calendar, not this world's players: parties stay.
-    this.draft = { ...parsed.data, parties: this.draft.parties, activePartyId: this.draft.activePartyId };
+    // A file that defines parties brings them, without members, for the GM to
+    // fill in below. One that does not says nothing about this world's
+    // players, so the parties it has stay as they are.
+    this.draft = parsed.hasParties
+      ? parsed.data
+      : { ...parsed.data, parties: this.draft.parties, activePartyId: this.draft.activePartyId };
     this.pendingEvents = parsed.events;
     ui.notifications.info(t("TTA.Notifications.CalendarImported"));
     this.render();

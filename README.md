@@ -28,6 +28,9 @@ The module is system-agnostic — it adds no game mechanics and works in any v14
   canonical numeric names (`YYYY-MM-DD`, and `YYYY-MM-00` for month notes).
 - Player notes that are private to their author and the GMs by default.
 - **Ages**: named eras spanning a contiguous range of years, with overlap validation.
+- **Parties**: for a world where two or more groups play at different points in its
+  history. Each party has its own date and clock, and its own events and shared notes
+  that the other party never receives; the calendar, moons and Ages are shared.
 - **Moons**: up to twelve optional moons, each with its own cycle length — whole days
   or fractional, so a 29.53-day moon drifts as the real one does — starting offset and
   phase count, shown in the header, the day detail panel and the month grid.
@@ -204,9 +207,11 @@ await api.applyPreset("harptos", { createHolidays: true });
 ### Exporting and importing
 
 The **Export and import** section of the configuration window writes the calendar
-structure, its moons and the Age list to a JSON file, optionally including the
-timeline events. Journal notes are never included — export those with Foundry's own
-journal tools.
+structure, its moons, the Age list and the parties to a JSON file, optionally
+including the timeline events. Party members are left out, since they are this
+world's user accounts; a file that defines parties brings them in empty, and the
+import dialog says so. Journal notes are never included — export those with Foundry's
+own journal tools.
 
 Importing loads the file into the configuration editor rather than writing it
 straight to the world: the GM reviews the result, sees the usual validation and
@@ -225,6 +230,44 @@ note's title, date, and a plain-text excerpt of its content. Choose the event's 
 description, visibility, and optionally tick *Also make the original note visible to
 players*. The source note is never deleted or rewritten unless you tick that box, and
 the event keeps working even if the note is later removed.
+
+An event made from a player's note is always visible to players and belongs to the
+author's party, if they are in one. Promoting your own note leaves the visibility and
+party up to you.
+
+### Parties
+
+Parties are for one world that two or more groups play in, each at a different point
+in its history. Leave the section empty if one group plays in your world; nothing
+changes.
+
+In the **Parties** section of the configuration window, add a party, give it a name
+and colour, and pick its members from the world's player accounts. A player can be
+in one party; picking a player who is already in another party moves them. The first
+party you add becomes the **active party** and takes the current campaign date.
+
+- **The calendar stands on the active party's date.** Everyone sees it, the header
+  names the party, and the time controls and *Set date* move it. Its time changes
+  drive Foundry world time exactly as before parties existed.
+- **Switching parties.** A GM with more than one party gets a picker in the calendar
+  header. Choosing another party stores the current date on the outgoing party,
+  loads the incoming party's date into the calendar, and leaves Foundry world time
+  alone: a switch is not time passing. The configuration window's *Active party*
+  radio does the same on save.
+- **Where the others stand.** A GM sees a coloured marker on the month grid for each
+  party that is not active. Players do not.
+- **Events** can belong to a party (the *Party* field in the event editor) or be
+  shared. A party's player-visible events are stored where only its members and the
+  GMs receive them. The timeline gets a filter per party, and each card a party tag.
+- **Notes** gain a *Party* visibility. A player in a party gets a *Share with my
+  party* box in the note editor: the one visibility change a player can make, and
+  only for their own party.
+- **Removing a party** asks where its events and shared notes go: to another party, or
+  to everyone. Removing the last party turns parties off and keeps the campaign date.
+
+A party's own date can also be moved without making it active, through the API
+(`advanceTime(seconds, { partyId })` and friends). Such a move changes only that
+party's record and never Foundry world time; see the hooks below.
 
 ---
 
@@ -250,8 +293,9 @@ configuration, the campaign date, Ages, events, or the timeline display mode.
 | Create notes | yes | when enabled by the GM |
 | Edit / delete own notes | yes | yes |
 | Edit / delete anyone's notes | yes | no |
-| Change a note's visibility | yes | no |
+| Change a note's visibility | yes | only to share an own note with their own party, or take it back |
 | See all notes | yes | no |
+| Define parties, assign members, switch the active party | yes | no |
 | Create / edit / delete timeline events | yes | no |
 | Promote a note to an event | yes | no |
 | Open the timeline | yes | when enabled by the GM |
@@ -274,11 +318,12 @@ identity behind it is something the server vouched for.
 
 | Data | Location |
 |---|---|
-| Calendar structure, month lengths, current date, moons, player-visible Ages | world setting `sargas-through-the-ages.calendarData` |
-| Player-visible timeline events | world setting `sargas-through-the-ages.timelineEvents` |
+| Calendar structure, month lengths, current date, moons, player-visible Ages, parties (names, members, dates) and the active party | world setting `sargas-through-the-ages.calendarData` |
+| Player-visible shared timeline events | world setting `sargas-through-the-ages.timelineEvents` |
 | Hidden Ages, GM-only timeline events | flags on the **Calendar (GM only)** journal entry, which nobody owns |
+| A party's player-visible timeline events | flags on that party's **Calendar (party: …)** journal entry, observed by its members only |
 | Note text | Journal Entry Pages in the **Calendar Notes** folder |
-| Note metadata (date key, author, visibility) | page flags under `flags.sargas-through-the-ages` |
+| Note metadata (date key, author, visibility, party) | page flags under `flags.sargas-through-the-ages` |
 | Browsing position, filters | per-client, never shared |
 | In-flight player note writes | flags on the requesting player's own User document, cleared once handled |
 
@@ -291,7 +336,8 @@ Calendar Notes
 │  ├─ The caravan reaches Toloraria
 │  ├─ Wrenn's private observation
 │  └─ GM — Ashfen Roadhouse rumour
-└─ Calendar (GM only)
+├─ Calendar (GM only)
+└─ Calendar (party: The Northern Company)
 ```
 
 ---
@@ -396,8 +442,10 @@ as a fast path.
 
 | Hook | Payload | When |
 |---|---|---|
-| `sargas-through-the-ages.timeChanged` | `{ date, time, previous: { date, time }, elapsedSeconds, reason }` | The campaign date or time was set. `elapsedSeconds` is signed (negative on a rewind). `reason` is one of `api.TIME_CHANGE_REASON`: `"advance"` (the header controls, `advanceTime`, `advanceDays`), `"nextAdventureDay"`, or `"set"` (the date picker, `setCurrentDateTime`, a bare `advanceTo`). |
+| `sargas-through-the-ages.timeChanged` | `{ date, time, previous: { date, time }, elapsedSeconds, reason, partyId }` | The campaign date or time was set. `elapsedSeconds` is signed (negative on a rewind). `reason` is one of `api.TIME_CHANGE_REASON`: `"advance"` (the header controls, `advanceTime`, `advanceDays`), `"nextAdventureDay"`, or `"set"` (the date picker, `setCurrentDateTime`, a bare `advanceTo`). `partyId` is the active party's id, or `null` in a world without parties. |
 | `sargas-through-the-ages.dateChanged` | `date` | Same moment, date only. Kept for older listeners. |
+| `sargas-through-the-ages.partyTimeChanged` | `{ date, time, previous: { date, time }, elapsedSeconds, reason, partyId }` | A party that is **not** active had its own date or time moved (`api.advanceTime(seconds, { partyId })` and the like). The campaign date and Foundry world time did not change, and `timeChanged` did not fire: this is not time passing at the table. |
+| `sargas-through-the-ages.activePartyChanged` | `{ partyId, previousPartyId }` | A GM made another party active. The campaign date now reads that party's date; Foundry world time did not change and `timeChanged` did not fire. A companion that tracks the campaign date should re-read it rather than treat the jump as elapsed time. |
 | `sargas-through-the-ages.calendarConfigured` | `{ calendar, previous: { monthsPerYear, monthLengths, monthNames }, structureChanged }` | The calendar was saved from the configuration window, a preset or an import. Not emitted for Age-only saves. `structureChanged` is true when the month count or any month length differs, which is when dates stored by other modules may have become invalid. |
 
 ### For companion modules
@@ -407,6 +455,12 @@ as a fast path.
 `toAbsoluteDay`, `fromAbsoluteDay`, `campaignSeconds(date, time, calendar)` and the
 key helpers. Using these rather than re-implementing month sums keeps a companion's
 deadlines in exact agreement with the calendar.
+
+Parties change nothing for a companion that only reads `api.getCurrentDate()` and
+listens to `timeChanged`: both are about the active party, which is what the table
+is playing. `api.getParties()`, `api.getActiveParty()`, `api.getPartyDate(partyId)`
+and `api.getPartyForUser(user)` are there for a companion that wants to know about
+the others, and `api.utils.partyForUser(parties, userId)` is the pure lookup.
 
 `api.relay.createRelay({ moduleId })` builds (once per module id) an instance of the authenticated
 GM-executed write relay described under *What privacy means here*, with every flag
