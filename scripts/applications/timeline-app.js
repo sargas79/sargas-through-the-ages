@@ -16,8 +16,8 @@ import {
   getAgeForYear,
   getCalendar,
   getCurrentAge,
+  getCurrentDate,
   getParties,
-  getViewerDate,
   getVisibleAges
 } from "../services/calendar-service.js";
 import { addMonths, addYears, daysInMonth, parseKey } from "../services/date-service.js";
@@ -46,9 +46,7 @@ const TICK_BUDGET = 40;
 export class TimelineApp extends HandlebarsApplicationMixin(ApplicationV2) {
   constructor(options = {}) {
     super({ ...options, id: "tta-timeline" });
-    // "Now" here is the viewer's party's date: a player opens onto where their
-    // own group stands, a GM onto the active party.
-    const current = getViewerDate();
+    const current = getCurrentDate();
     this.viewYear = current.year;
     this.viewMonth = current.month;
     this.filter = "all";
@@ -98,7 +96,7 @@ export class TimelineApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   async _prepareContext() {
     const calendar = getCalendar();
-    const current = getViewerDate();
+    const current = getCurrentDate();
     const mode = getMode();
     const gm = isGM();
     const age = this.viewAge;
@@ -452,7 +450,7 @@ export class TimelineApp extends HandlebarsApplicationMixin(ApplicationV2) {
   }
 
   static onGotoCurrent() {
-    const current = getViewerDate();
+    const current = getCurrentDate();
     this.viewYear = current.year;
     this.viewMonth = current.month;
     this.#browse();

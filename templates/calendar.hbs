@@ -15,17 +15,18 @@
 
     <header class="tta-header">
       <div class="tta-header-date">
-        {{#if partyChip}}
-          <span class="tta-party-chip" style="--tta-tint: {{partyChip.color}}"
-                data-tooltip="{{localize "TTA.Parties.YourParty"}}">{{partyChip.name}}</span>
-        {{/if}}
+        {{!-- The calendar stands on the active party's date. A GM with more
+              than one party switches it here; everyone else just sees whose. --}}
         {{#if partyChoices}}
-          <select class="tta-compact tta-party-select" data-party-select aria-label="{{localize "TTA.Parties.ChooseParty"}}"
-                  style="--tta-tint: {{viewedParty.color}}">
+          <select class="tta-compact tta-party-select" data-party-select aria-label="{{localize "TTA.Parties.Activate"}}"
+                  data-tooltip="{{localize "TTA.Parties.ActivateTooltip"}}" style="--tta-tint: {{activeParty.color}}">
             {{#each partyChoices}}
               <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
             {{/each}}
           </select>
+        {{else if activeParty}}
+          <span class="tta-party-chip" style="--tta-tint: {{activeParty.color}}"
+                data-tooltip="{{localize "TTA.Parties.ActiveParty"}}">{{activeParty.name}}</span>
         {{/if}}
         <span class="tta-current-date">{{currentDateLabel}}</span>
         <span class="tta-current-time">{{currentTimeLabel}}</span>
@@ -74,13 +75,6 @@
         <p class="tta-strip">
           <span>{{localize "TTA.Time.OutOfSync"}}</span>
           <button type="button" class="tta-compact" data-action="acknowledgeWorldTime">{{localize "TTA.Time.Acknowledge"}}</button>
-        </p>
-      {{/if}}
-      {{#if canMakeActive}}
-        <p class="tta-strip tta-strip-party" style="--tta-tint: {{viewedParty.color}}">
-          <span>{{localize "TTA.Parties.NotActiveHint" name=viewedParty.name}}</span>
-          <button type="button" class="tta-compact" data-action="makeActive"
-                  data-tooltip="{{localize "TTA.Parties.MakeActiveTooltip"}}">{{localize "TTA.Parties.MakeActive"}}</button>
         </p>
       {{/if}}
     {{/if}}

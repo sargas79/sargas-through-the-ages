@@ -442,15 +442,10 @@
 
 .tta .tta-strip button { margin-left: auto; white-space: nowrap; font-size: 12px; }
 
-/* The party strip is informational, in the party's own colour rather than the warning tint. */
-.tta .tta-strip-party {
-  background: color-mix(in srgb, var(--tta-tint) 14%, transparent);
-}
-.tta .tta-strip-party::before { background: var(--tta-tint); }
 
 /* ---------- Parties ------------------------------------------------------ */
 
-/* A player's party name sits before the date as a small tinted chip. */
+/* The active party's name sits before the date as a small tinted chip. */
 .tta .tta-party-chip {
   display: inline-flex;
   align-items: center;
@@ -476,7 +471,7 @@
   flex: none;
 }
 
-/* The GM's party picker carries the shown party's colour on its left edge. */
+/* The GM's party picker carries the active party's colour on its left edge. */
 .tta .tta-party-select { box-shadow: inset 3px 0 0 var(--tta-tint); padding-left: 10px; }
 
 /* Where the other parties stand, drawn in the corner of their day cell. */

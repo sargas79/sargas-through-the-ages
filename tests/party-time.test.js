@@ -12,7 +12,6 @@ import {
   getCurrentTime,
   getPartyDate,
   getPartyTime,
-  getViewerDate,
   setActiveParty,
   setCurrentDateTime,
   TIME_CHANGE_REASON
@@ -62,14 +61,6 @@ describe("reading party dates", () => {
     assert.deepEqual(getPartyTime("b"), B_TIME);
     assert.deepEqual(getPartyDate(null), A_DATE);
     assert.deepEqual(getPartyDate("missing"), A_DATE);
-  });
-
-  it("shows a viewer their own party, and everyone else the active party", () => {
-    setup();
-    assert.deepEqual(getViewerDate({ id: "pb" }), B_DATE);
-    assert.deepEqual(getViewerDate({ id: "pa" }), A_DATE);
-    assert.deepEqual(getViewerDate({ id: "nobody" }), A_DATE);
-    assert.deepEqual(getViewerDate({ id: "gm", isGM: true }), A_DATE);
   });
 });
 

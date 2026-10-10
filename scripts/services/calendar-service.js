@@ -52,9 +52,9 @@ export function getCalendar() {
 /**
  * The shared current date: the active party's, when parties are in use.
  *
- * This is "now" for the world as a whole, and for Foundry's world time. A
- * player in a party that is not active stands somewhere else; see
- * {@link getViewerDate}.
+ * This is "now" for the world as a whole, and for Foundry's world time. Every
+ * client shows it; a party that is not active keeps its own date on its record
+ * (see {@link getPartyDate}) until a GM makes it active again.
  */
 export function getCurrentDate() {
   return getCalendar().currentDate;
@@ -112,25 +112,6 @@ export function getPartyDate(partyId) {
 /** The clock a party stands at. */
 export function getPartyTime(partyId) {
   return getPartyMoment(partyId).time;
-}
-
-/**
- * The moment a user should be shown: their own party's, else the active
- * party's (which, with no parties, is simply the campaign date).
- * @returns {{date:object, time:object}}
- */
-export function getViewerMoment(user = game.user) {
-  return getPartyMoment(getPartyForUser(user)?.id ?? null);
-}
-
-/** The date a user should be shown. */
-export function getViewerDate(user = game.user) {
-  return getViewerMoment(user).date;
-}
-
-/** The clock a user should be shown. */
-export function getViewerTime(user = game.user) {
-  return getViewerMoment(user).time;
 }
 
 /**
