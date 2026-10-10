@@ -25,6 +25,16 @@
           {{/each}}
         </span>
       {{/if}}
+      {{#if parties.length}}
+        {{!-- Other parties standing on this day, each in its own colour. The
+              shown party's own day is the tinted cell, not a mark. --}}
+        <span class="tta-day-parties">
+          {{#each parties}}
+            <span class="tta-party-mark" style="--tta-tint: {{color}}" aria-hidden="true"></span>
+            <span class="tta-sr-only">{{localize "TTA.Parties.DayMarkLabel" name=name}}</span>
+          {{/each}}
+        </span>
+      {{/if}}
       {{#if isCurrent}}<span class="tta-sr-only">{{localize "TTA.Calendar.IsCurrentDay"}}</span>{{/if}}
     </button>
   </div>

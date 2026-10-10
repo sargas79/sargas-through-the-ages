@@ -436,6 +436,53 @@
 
 .tta .tta-strip button { margin-left: auto; white-space: nowrap; font-size: 12px; }
 
+/* The party strip is informational, in the party's own colour rather than the warning tint. */
+.tta .tta-strip-party {
+  background: color-mix(in srgb, var(--tta-tint) 14%, transparent);
+}
+.tta .tta-strip-party::before { background: var(--tta-tint); }
+
+/* ---------- Parties ------------------------------------------------------ */
+
+/* A player's party name sits before the date as a small tinted chip. */
+.tta .tta-party-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--tta-text);
+  background: color-mix(in srgb, var(--tta-tint) 24%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tta-tint) 60%, transparent);
+}
+
+.tta .tta-party-chip::before,
+.tta .tta-party-mark {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tta-tint);
+  flex: none;
+}
+
+/* The GM's party picker carries the shown party's colour on its left edge. */
+.tta .tta-party-select { box-shadow: inset 3px 0 0 var(--tta-tint); padding-left: 10px; }
+
+/* Where the other parties stand, drawn in the corner of their day cell. */
+.tta .tta-day-parties {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: flex;
+  gap: 2px;
+}
+.tta .tta-day-button { position: relative; }
+
 .tta .tta-panel {
   padding: 9px 10px;
   border-radius: var(--tta-radius-sm);

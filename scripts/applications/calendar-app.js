@@ -20,15 +20,17 @@ import {
   formatTime,
   formatMonth,
   formatYear,
+  getActivePartyId,
   getAgeForYear,
   getCalendar,
-  getCurrentAge,
-  getCurrentDate,
-  getCurrentTime,
   getMoonPhases,
+  getParties,
+  getPartyForUser,
+  getPartyMoment,
   getVisibleMoons,
   isConfigured,
   isWorldTimeOutOfSync,
+  setActiveParty
 } from "../services/calendar-service.js";
 import {
   addMonths,
@@ -76,7 +78,14 @@ const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
   constructor(options = {}) {
     super({ ...options, id: "tta-calendar" });
-    const current = getCurrentDate();
+    /**
+     * The party whose date this window shows and whose clock its controls move.
+     *
+     * Only a GM chooses; a player always sees their own party. Null means "the
+     * active party", which is also the only answer in a world without parties.
+     */
+    this.partyId = null;
+    const current = this.#shownMoment().date;
     this.viewYear = current.year;
     this.viewMonth = current.month;
     this.selectedDay = current.day;
@@ -106,6 +115,7 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
       nextDay: CalendarApp.onNextDay,
       advanceTime: CalendarApp.onAdvanceTime,
       acknowledgeWorldTime: CalendarApp.onAcknowledgeWorldTime,
+      makeActive: CalendarApp.onMakeActive,
       setDate: CalendarApp.onSetDate,
       setSelectedAsCurrent: CalendarApp.onSetSelectedAsCurrent,
       openConfig: CalendarApp.onOpenConfig,
@@ -136,10 +146,57 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
     return { year: this.viewYear, month: this.viewMonth, day: this.selectedDay };
   }
 
+  /**
+   * The party this window is about, resolved against the world as it is now.
+   *
+   * A player's answer is their own party, so two groups in one world each open
+   * onto their own date. A GM's is whatever they picked, as long as that party
+   * still exists. Everyone else, and every world without parties, gets the
+   * active party, whose date is the campaign date.
+   * @returns {string|null}
+   */
+  #shownPartyId() {
+    const parties = getParties();
+    if (!parties.length) return null;
+    if (!isGM()) return getPartyForUser()?.id ?? getActivePartyId();
+    return parties.some(party => party.id === this.partyId) ? this.partyId : getActivePartyId();
+  }
+
+  /** The date and time the window shows. */
+  #shownMoment() {
+    return getPartyMoment(this.#shownPartyId());
+  }
+
+  /**
+   * Where the other parties stand in the viewed month, by day.
+   *
+   * A GM sees every party but the one shown, whose own day is the tinted cell.
+   * A player sees none: another group's whereabouts is the GM's to reveal.
+   * @returns {Map<number, Array<{name:string, color:string}>>}
+   */
+  #partyMarks(shownId) {
+    const marks = new Map();
+    if (!isGM()) return marks;
+    for (const party of getParties()) {
+      if (party.id === shownId) continue;
+      const date = getPartyMoment(party.id).date;
+      if (date.year !== this.viewYear || date.month !== this.viewMonth) continue;
+      if (!marks.has(date.day)) marks.set(date.day, []);
+      marks.get(date.day).push({ name: party.name, color: party.color });
+    }
+    return marks;
+  }
+
   async _prepareContext() {
     const calendar = getCalendar();
-    const current = getCurrentDate();
     const gm = isGM();
+    const parties = getParties();
+    const shownId = this.#shownPartyId();
+    const shown = getPartyMoment(shownId);
+    const current = shown.date;
+    const viewedParty = parties.find(party => party.id === shownId) ?? null;
+    const activePartyId = getActivePartyId();
+    const partyMarks = this.#partyMarks(shownId);
 
     // Keep browsing state inside the configured bounds after a reconfiguration.
     this.viewMonth = Math.min(Math.max(1, this.viewMonth), calendar.monthsPerYear);
@@ -171,6 +228,7 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
         dateKey: dayKey(date.year, date.month, date.day),
         weekday: weekdayName(date, calendar),
         isCurrent: isSameDay(date, current),
+        parties: partyMarks.get(cell.day) ?? [],
         isSelected: cell.day === this.selectedDay,
         noteCount: notes,
         eventCount: events,
@@ -195,12 +253,27 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const dayEvents = getEventsForDay(this.viewYear, this.viewMonth, this.selectedDay);
     const monthEvents = getEventsForMonth(this.viewYear, this.viewMonth);
     const viewAge = getAgeForYear(this.viewYear);
-    const currentAge = getCurrentAge();
+    const currentAge = getAgeForYear(current.year);
     const scopes = allowedNoteScopes();
 
     return {
       isGM: gm,
       configured: isConfigured(),
+      // A player's party is a chip; a GM's is a choice. Neither appears in a
+      // world without parties.
+      partyChip: !gm && viewedParty && getPartyForUser()?.id === viewedParty.id
+        ? { name: viewedParty.name, color: viewedParty.color }
+        : null,
+      partyChoices: gm && parties.length
+        ? parties.map(party => ({
+          value: party.id,
+          selected: party.id === shownId,
+          label: party.id === activePartyId ? t("TTA.Parties.ActiveSuffix", { name: party.name }) : party.name
+        }))
+        : null,
+      viewedParty,
+      canMakeActive: gm && !!viewedParty && viewedParty.id !== activePartyId,
+      showPartyMarks: gm && parties.length > 1,
       calendar,
       weekdayNames: calendar.weekdayNames,
       weeks,
@@ -212,7 +285,7 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
       viewingCurrentMonth: isSameMonth({ year: this.viewYear, month: this.viewMonth }, current),
       currentDate: current,
       currentDateLabel: formatDate(current),
-      currentTimeLabel: formatTime(),
+      currentTimeLabel: formatTime(shown.time),
       currentAge: currentAge ? { ...currentAge, endYear: endYear(currentAge) } : null,
       viewAge: viewAge ? { ...viewAge, endYear: endYear(viewAge) } : null,
       selectedDay: this.selectedDay,
@@ -266,6 +339,11 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const preset = this.element.querySelector("[data-time-preset]");
     preset?.addEventListener("change", event => {
       this.timePreset = event.currentTarget.value;
+    });
+    const party = this.element.querySelector("[data-party-select]");
+    party?.addEventListener("change", event => {
+      this.partyId = event.currentTarget.value || null;
+      CalendarApp.onGotoCurrent.call(this);
     });
   }
 
@@ -349,7 +427,7 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
   }
 
   static onGotoCurrent() {
-    const current = getCurrentDate();
+    const current = this.#shownMoment().date;
     this.viewYear = current.year;
     this.viewMonth = current.month;
     this.selectedDay = current.day;
@@ -367,20 +445,21 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
   }
 
   static async onNextDay() {
-    await advanceDays(1);
+    await advanceDays(1, { partyId: this.#shownPartyId() });
     CalendarApp.onGotoCurrent.call(this);
   }
 
   static async onAdvanceTime() {
+    const options = { partyId: this.#shownPartyId() };
     const advances = {
-      minute: () => advanceTime(60),
-      tenMinutes: () => advanceTime(600),
-      hour: () => advanceTime(3600),
-      tenHours: () => advanceTime(36000),
-      day: () => advanceTime(86400),
-      adventureDay: () => advanceToNextAdventureDay(),
-      week: () => advanceTime(604800),
-      month: () => advanceMonths(1)
+      minute: () => advanceTime(60, options),
+      tenMinutes: () => advanceTime(600, options),
+      hour: () => advanceTime(3600, options),
+      tenHours: () => advanceTime(36000, options),
+      day: () => advanceTime(86400, options),
+      adventureDay: () => advanceToNextAdventureDay(options),
+      week: () => advanceTime(604800, options),
+      month: () => advanceMonths(1, options)
     };
     await advances[this.timePreset]?.();
     CalendarApp.onGotoCurrent.call(this);
@@ -390,8 +469,15 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
     if (await acknowledgeWorldTime()) this.render();
   }
 
+  /** Make the shown party the active one; the window follows it. */
+  static async onMakeActive() {
+    const partyId = this.#shownPartyId();
+    if (!partyId) return;
+    if (await setActiveParty(partyId)) CalendarApp.onGotoCurrent.call(this);
+  }
+
   static async onSetDate() {
-    await CalendarApp.#promptForCurrentDate.call(this, getCurrentDate());
+    await CalendarApp.#promptForCurrentDate.call(this, this.#shownMoment().date);
   }
 
   /**
@@ -408,8 +494,10 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
   /** The Set Date form, opened over whichever date the caller starts from. */
   static async #promptForCurrentDate(startDate) {
     const calendar = getCalendar();
+    const partyId = this.#shownPartyId();
+    const isActiveParty = !partyId || partyId === getActivePartyId();
     const current = clampDate(startDate, calendar);
-    const currentTime = getCurrentTime();
+    const currentTime = this.#shownMoment().time;
     const monthOptions = calendar.monthNames
       .map((name, index) => html`<option value="${index + 1}" ${trustedHTML(index + 1 === current.month ? "selected" : "")}>${name}</option>`)
       .join("");
@@ -434,9 +522,11 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
     });
     if (!result) return;
 
+    // Only the active party's date carries Foundry world time with it, so
+    // only that move needs the warning about time-based effects.
     const confirmed = await confirmDialog({
       title: t("TTA.Time.SetDateConfirmTitle"),
-      content: `<p>${t("TTA.Time.SetDateConfirmBody")}</p>`,
+      content: `<p>${t(isActiveParty ? "TTA.Time.SetDateConfirmBody" : "TTA.Time.SetDateConfirmBodyParty")}</p>`,
       yesLabel: t("TTA.Time.SetDate")
     });
     if (!confirmed) return;
@@ -445,7 +535,7 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
       year: Number(result.year),
       month: Number(result.month),
       day: Number(result.day)
-    }, { hour: Number(result.hour), minute: Number(result.minute) });
+    }, { hour: Number(result.hour), minute: Number(result.minute) }, { partyId });
     CalendarApp.onGotoCurrent.call(this);
   }
 
