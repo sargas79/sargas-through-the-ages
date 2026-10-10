@@ -4,6 +4,12 @@ All notable changes to Sargas Through the Ages are documented here. The format f
 
 ## [Unreleased]
 
+### Added
+
+- The calendar shows the viewed month's number under its name, for example "Month 3 of 12".
+
+## [3.0.2] - 2026-10-09
+
 ### Changed
 
 - The module's display name is now Sargas Through the Ages, matching its id. Its id, settings and saved data are unchanged.
@@ -190,6 +196,7 @@ Initial release, targeting Foundry VTT v14 build 366.
 - Full English localisation and a versioned, idempotent data-migration framework.
 - Public API at `game.modules.get("through-the-ages").api`.
 
+[3.0.2]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v3.0.2
 [3.0.1]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v3.0.1
 [3.0.0]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v3.0.0
 [2.2.0]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v2.2.0

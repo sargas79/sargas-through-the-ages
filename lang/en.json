@@ -39,6 +39,7 @@
       "LegendEvents": "Timeline events",
       "LegendNotes": "Notes",
       "LegendToday": "Outlined cell = current day",
+      "MonthNumber": "Month {month} of {months}",
       "NavLabel": "Calendar navigation",
       "NextMonth": "Next month",
       "NextYear": "Next year",
