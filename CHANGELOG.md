@@ -9,8 +9,12 @@ All notable changes to Sargas Through the Ages are documented here. The format f
 - **Parties**: the stored calendar now carries a list of parties, each a named group of players with its own date and clock, and an active-party pointer. Stored data moves to schema 6; a world that defines no parties is unchanged in every other respect.
 - Every date and time operation (`setCurrentDateTime`, `advanceTime`, `advanceDays` and the rest) takes an optional `partyId`. The active party's changes go through Foundry world time as before; another party's change moves only that party's record and fires `sargas-through-the-ages.partyTimeChanged` rather than `timeChanged`, so companion modules never mistake it for time passing at the table. `setActiveParty` swaps which party the calendar stands on, in one write, without touching world time, and fires `sargas-through-the-ages.activePartyChanged`. The `timeChanged` payload gains `partyId`.
 
+- A **Parties** section in the configuration window: add, name, colour and order parties, pick their members from the world's players, and choose the active party. The calendar window shows a player their own party's date, and gives a GM a party picker, a *Make active* control and per-party markers on the month grid.
+- Timeline events can belong to a party. A party's player-visible events are stored in a journal entry only its members and the GMs receive, so the other party never has them; the event editor gains a *Party* field, the timeline a filter per party, and event cards a party tag. Removing a party asks where its events go.
+
 ### Changed
 
+- A timeline event promoted from a player's note now belongs to the author's party and is visible to that party, rather than to every player. In a world without parties the behaviour is unchanged.
 - The module's display name is now Sargas Through the Ages, matching its id. Its id, settings and saved data are unchanged.
 - The changelog no longer hard-wraps its lines and keeps code out of bold text, so it reads cleanly in Foundry's changelog viewer.
 

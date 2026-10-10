@@ -189,6 +189,8 @@ export function migrateEvents(events) {
       title: String(event.title ?? "").trim() || "Untitled Event",
       description: event.description ?? "",
       visibility: event.visibility === VISIBILITY.PLAYERS ? VISIBILITY.PLAYERS : VISIBILITY.GM_ONLY,
+      // Null is "shared": the event belongs to the world, not to one party.
+      partyId: typeof event.partyId === "string" && event.partyId ? event.partyId : null,
       color: event.color || DEFAULT_COLOR,
       icon: event.icon || "fa-solid fa-scroll",
       source: {

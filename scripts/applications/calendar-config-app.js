@@ -7,7 +7,7 @@
  * could strand existing notes or events require an explicit confirmation.
  */
 
-import { confirmDialog, html, log, randomID, t, trustedHTML } from "../compat.js";
+import { confirmDialog, html, log, promptForm, randomID, t, trustedHTML } from "../compat.js";
 import {
   DEFAULT_COLOR,
   DEFAULT_MONTH_NAMES,
@@ -78,6 +78,13 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
     this.pendingHolidays = null;
     /** The preset id showing in the picker, kept across re-renders. */
     this.presetId = "";
+    /**
+     * Parties removed in this window, each with where its content goes, applied
+     * only when the form is submitted. Until then the party's store and events
+     * are untouched, like every other change the draft holds.
+     * @type {Array<{id:string, moveTo:string|null}>}
+     */
+    this.partyRemovals = [];
   }
 
   static DEFAULT_OPTIONS = {
@@ -474,17 +481,54 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
     else if (isActive) body = t("TTA.Parties.RemoveActiveBody", { name: party.name, next: remaining[0].name });
     else body = t("TTA.Parties.RemoveBody", { name: party.name });
 
-    const confirmed = await confirmDialog({
-      title: t("TTA.Parties.RemoveTitle"),
-      content: html`<p>${body}</p>`,
-      yesLabel: t("TTA.Common.Remove"),
-      yesIcon: "fa-solid fa-trash"
-    });
-    if (!confirmed) return;
+    // A party that still has content is asked where it should go, so removing
+    // the party never silently removes what it recorded. Only a party the
+    // world already knows can hold any; one added in this window has none.
+    const events = timeline.countPartyEvents(id);
+    let moveTo = null;
+    if (events > 0) {
+      const options = [
+        html`<option value="">${t("TTA.Parties.RemoveMoveShared")}</option>`,
+        ...remaining.map(p => html`<option value="${p.id}">${p.name}</option>`)
+      ].join("");
+      const result = await promptForm({
+        title: t("TTA.Parties.RemoveTitle"),
+        content: html`<div class="tta-prompt">
+          <p>${body}</p>
+          <label for="tta-party-move">${t("TTA.Parties.RemoveMoveContent", { events })}</label>
+          <select id="tta-party-move" name="moveTo">${trustedHTML(options)}</select>
+        </div>`,
+        okLabel: t("TTA.Common.Remove")
+      });
+      if (!result) return;
+      moveTo = result.moveTo || null;
+    } else {
+      const confirmed = await confirmDialog({
+        title: t("TTA.Parties.RemoveTitle"),
+        content: html`<p>${body}</p>`,
+        yesLabel: t("TTA.Common.Remove"),
+        yesIcon: "fa-solid fa-trash"
+      });
+      if (!confirmed) return;
+    }
 
+    if (findParty(getData().parties, id)) this.partyRemovals.push({ id, moveTo });
     this.draft.parties = remaining.map((p, i) => ({ ...p, sortOrder: i }));
     if (isActive) this.draft.activePartyId = remaining[0]?.id ?? null;
     this.render();
+  }
+
+  /**
+   * Carry out the removals staged by {@link onRemoveParty}, after the
+   * configuration without those parties has been written: each party's events
+   * are moved where the GM said, then its store is deleted.
+   */
+  async #applyPartyRemovals() {
+    for (const { id, moveTo } of this.partyRemovals) {
+      await timeline.reassignPartyEvents(id, moveTo);
+      await partyStore.deletePartyEntry(id);
+    }
+    this.partyRemovals = [];
   }
 
   static async onMovePartyUp(event, target) {
@@ -921,6 +965,7 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
           await setCurrentDateTime(this.draft.calendar.currentDate, this.draft.calendar.currentTime);
         }
       }
+      await this.#applyPartyRemovals();
       if (Array.isArray(this.pendingEvents)) {
         await timeline.replaceEvents(this.pendingEvents);
         this.pendingEvents = null;

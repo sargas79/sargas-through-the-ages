@@ -288,6 +288,12 @@
 }
 
 .tta .tta-tag-accent { background: var(--tta-accent-800); color: var(--tta-accent-100); }
+/* A party tag takes the party's own colour so two parties' events read apart at a glance. */
+.tta .tta-tag-party {
+  background: color-mix(in srgb, var(--tta-tint) 28%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tta-tint) 60%, transparent);
+  color: var(--tta-text);
+}
 .tta .tta-tag-outline {
   background: transparent;
   border: 1px solid var(--tta-accent);

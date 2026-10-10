@@ -9,6 +9,9 @@
     <div class="tta-event-meta">
       <span class="tta-key">{{dateLabel}}</span>
       <span class="tta-tag {{#unless isPlayerVisible}}tta-tag-accent{{/unless}}">{{visibilityLabel}}</span>
+      {{#if partyName}}
+        <span class="tta-tag tta-tag-party" style="--tta-tint: {{partyColor}}">{{partyName}}</span>
+      {{/if}}
       {{#if showOrigin}}
         {{#if sourceAvailable}}
           <button type="button" class="tta-ghost tta-compact" data-action="openSource" data-uuid="{{sourceUuid}}"

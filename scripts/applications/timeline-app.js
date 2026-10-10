@@ -16,7 +16,8 @@ import {
   getAgeForYear,
   getCalendar,
   getCurrentAge,
-  getCurrentDate,
+  getParties,
+  getViewerDate,
   getVisibleAges
 } from "../services/calendar-service.js";
 import { addMonths, addYears, daysInMonth, parseKey } from "../services/date-service.js";
@@ -45,7 +46,9 @@ const TICK_BUDGET = 40;
 export class TimelineApp extends HandlebarsApplicationMixin(ApplicationV2) {
   constructor(options = {}) {
     super({ ...options, id: "tta-timeline" });
-    const current = getCurrentDate();
+    // "Now" here is the viewer's party's date: a player opens onto where their
+    // own group stands, a GM onto the active party.
+    const current = getViewerDate();
     this.viewYear = current.year;
     this.viewMonth = current.month;
     this.filter = "all";
@@ -95,7 +98,7 @@ export class TimelineApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   async _prepareContext() {
     const calendar = getCalendar();
-    const current = getCurrentDate();
+    const current = getViewerDate();
     const mode = getMode();
     const gm = isGM();
     const age = this.viewAge;
@@ -280,6 +283,15 @@ export class TimelineApp extends HandlebarsApplicationMixin(ApplicationV2) {
       { value: "players", label: t("TTA.Timeline.FilterPlayerVisible") }
     ];
     if (gm) choices.push({ value: "gm", label: t("TTA.Timeline.FilterGMOnly") });
+    // A player's list already holds only their own party's events and the
+    // shared ones, so the party filters are a GM's tool.
+    const parties = getParties();
+    if (gm && parties.length) {
+      choices.push({ value: "shared", label: t("TTA.Timeline.FilterShared") });
+      for (const party of parties) {
+        choices.push({ value: `party:${party.id}`, label: t("TTA.Timeline.FilterParty", { name: party.name }) });
+      }
+    }
     return choices.map(choice => ({ ...choice, selected: choice.value === this.filter }));
   }
 
@@ -302,7 +314,13 @@ export class TimelineApp extends HandlebarsApplicationMixin(ApplicationV2) {
         return events.filter(event => event.visibility === VISIBILITY.PLAYERS);
       case "gm":
         return events.filter(event => event.visibility === VISIBILITY.GM_ONLY);
+      case "shared":
+        return events.filter(event => !event.partyId);
       default:
+        if (this.filter.startsWith("party:")) {
+          const partyId = this.filter.slice("party:".length);
+          return events.filter(event => event.partyId === partyId);
+        }
         return events;
     }
   }
@@ -310,8 +328,11 @@ export class TimelineApp extends HandlebarsApplicationMixin(ApplicationV2) {
   async #decorate(event, gm) {
     const parsed = parseKey(event.dateKey);
     const sourceAvailable = event.source?.noteUuid ? !!(await fromUuid(event.source.noteUuid).catch(() => null)) : false;
+    const party = event.partyId ? getParties().find(candidate => candidate.id === event.partyId) : null;
     return {
       ...event,
+      partyName: party?.name ?? null,
+      partyColor: party?.color ?? null,
       dateLabel: parsed ? formatDate(parsed) : event.dateKey,
       year: parsed?.year ?? null,
       enriched: await enrichHTML(event.description),
@@ -431,7 +452,7 @@ export class TimelineApp extends HandlebarsApplicationMixin(ApplicationV2) {
   }
 
   static onGotoCurrent() {
-    const current = getCurrentDate();
+    const current = getViewerDate();
     this.viewYear = current.year;
     this.viewMonth = current.month;
     this.#browse();
