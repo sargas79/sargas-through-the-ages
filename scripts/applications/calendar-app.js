@@ -208,6 +208,7 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
       viewYearLabel: formatYear(this.viewYear, calendar),
       viewMonth: this.viewMonth,
       viewMonthName: monthName(this.viewMonth, calendar),
+      viewMonthNumberLabel: t("TTA.Calendar.MonthNumber", { month: this.viewMonth, months: calendar.monthsPerYear }),
       viewLabel: formatMonth(this.viewYear, this.viewMonth),
       viewingCurrentMonth: isSameMonth({ year: this.viewYear, month: this.viewMonth }, current),
       currentDate: current,

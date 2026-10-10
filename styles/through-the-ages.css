@@ -579,6 +579,7 @@
 
 .tta .tta-month-head .tta-kicker { margin-bottom: 6px; }
 .tta .tta-view-year { color: color-mix(in srgb, var(--tta-text) 40%, transparent); }
+.tta .tta-view-month-number { display: block; font-size: 0.85em; color: color-mix(in srgb, var(--tta-text) 55%, transparent); }
 .tta .tta-month-nav { display: flex; gap: 4px; }
 
 .tta .tta-day-empty { height: 52px; }
