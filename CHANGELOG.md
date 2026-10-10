@@ -8,7 +8,6 @@ All notable changes to Sargas Through the Ages are documented here. The format f
 
 - **Parties**: the stored calendar now carries a list of parties, each a named group of players with its own date and clock, and an active-party pointer. Stored data moves to schema 6; a world that defines no parties is unchanged in every other respect.
 - Every date and time operation (`setCurrentDateTime`, `advanceTime`, `advanceDays` and the rest) takes an optional `partyId`. The active party's changes go through Foundry world time as before; another party's change moves only that party's record and fires `sargas-through-the-ages.partyTimeChanged` rather than `timeChanged`, so companion modules never mistake it for time passing at the table. `setActiveParty` swaps which party the calendar stands on, in one write, without touching world time, and fires `sargas-through-the-ages.activePartyChanged`. The `timeChanged` payload gains `partyId`.
-
 - A **Parties** section in the configuration window: add, name, colour and order parties, pick their members from the world's players, and choose the active party. The calendar stands on the active party's date for everyone and moves only when a GM switches the active party from the calendar header; the header names the active party, and a GM also sees where the other parties stand on the month grid.
 - Notes can be shared with a party: a new *Party* visibility whose page only the author, the party's members and the GMs receive. A player in a party gets a *Share with my party* box in the note editor — the one visibility change a player may make, and only for their own party, re-checked on the GM's side. Membership changes update the pages; removing a party moves its notes with its events.
 - The calendar export carries the parties (without their members) and the active party; an import that defines parties brings them in empty and says so. The API gains `getParties`, `getParty`, `getActiveParty`, `getActivePartyId`, `getPartyForUser`, `getPartyDate`, `getPartyTime`, `setActiveParty` and `utils.partyForUser`.
@@ -17,6 +16,17 @@ All notable changes to Sargas Through the Ages are documented here. The format f
 ### Changed
 
 - A timeline event promoted from a player's note now belongs to the author's party and is visible to that party, rather than to every player. In a world without parties the behaviour is unchanged.
+
+## [3.1.0] - 2026-10-10
+
+### Added
+
+- The calendar shows the viewed month's number under its name, for example "Month 3 of 12".
+
+## [3.0.2] - 2026-10-09
+
+### Changed
+
 - The module's display name is now Sargas Through the Ages, matching its id. Its id, settings and saved data are unchanged.
 - The changelog no longer hard-wraps its lines and keeps code out of bold text, so it reads cleanly in Foundry's changelog viewer.
 
@@ -201,6 +211,7 @@ Initial release, targeting Foundry VTT v14 build 366.
 - Full English localisation and a versioned, idempotent data-migration framework.
 - Public API at `game.modules.get("through-the-ages").api`.
 
+[3.0.2]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v3.0.2
 [3.0.1]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v3.0.1
 [3.0.0]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v3.0.0
 [2.2.0]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v2.2.0
