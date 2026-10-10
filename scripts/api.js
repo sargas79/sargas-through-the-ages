@@ -14,6 +14,7 @@ import * as legacyIdService from "./services/legacy-id-service.js";
 import * as journalService from "./services/journal-service.js";
 import * as moonService from "./services/moon-service.js";
 import * as noteService from "./services/note-service.js";
+import * as partyService from "./services/party-service.js";
 import * as portabilityService from "./services/portability-service.js";
 import * as presetService from "./services/preset-service.js";
 import * as relayService from "./services/relay-service.js";
@@ -113,6 +114,17 @@ export function buildApi() {
     advanceToNextAdventureDay: calendarService.advanceToNextAdventureDay,
     acknowledgeWorldTime: calendarService.acknowledgeWorldTime,
 
+    // Parties. The calendar stands on the active party's date; every time
+    // operation above takes `{ partyId }` to move another party's own record.
+    getParties: calendarService.getParties,
+    getParty: calendarService.getParty,
+    getActiveParty: calendarService.getActiveParty,
+    getActivePartyId: calendarService.getActivePartyId,
+    getPartyForUser: calendarService.getPartyForUser,
+    getPartyDate: calendarService.getPartyDate,
+    getPartyTime: calendarService.getPartyTime,
+    setActiveParty: calendarService.setActiveParty,
+
     // Notes
     getNotesForKey: noteService.getNotesForKey,
     getDayNotes: noteService.getDayNotes,
@@ -160,6 +172,7 @@ export function buildApi() {
       weekdayName: dateService.weekdayName,
       endYear: ageService.endYear,
       findAgeForYear: ageService.findAgeForYear,
+      partyForUser: partyService.partyForUser,
       phaseIndex: moonService.phaseIndex,
       phaseKey: moonService.phaseKey,
       illumination: moonService.illumination,

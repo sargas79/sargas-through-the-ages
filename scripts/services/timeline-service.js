@@ -1,11 +1,13 @@
 /**
  * Timeline events and display modes.
  *
- * Events are small, ordered records held in two stores, chosen by visibility:
- * player-visible ones in a world setting, GM-only ones in the GM-only journal
- * entry. That split is not tidiness — a world setting is delivered in full to
- * every client, so a GM-only event kept in one was readable by any player who
- * looked, whatever the interface showed them.
+ * Events are small, ordered records held in several stores, chosen by
+ * visibility and party: player-visible shared ones in a world setting, GM-only
+ * ones in the GM-only journal entry, and player-visible party ones in that
+ * party's journal entry. That split is not tidiness — a world setting is
+ * delivered in full to every client, so a GM-only event kept in one was
+ * readable by any player who looked, whatever the interface showed them, and
+ * a party's event would be readable by the other party.
  *
  * Only GMs write. Every client reads whatever it is entitled to receive, and
  * then filters again on top.
@@ -21,10 +23,12 @@ import {
   VISIBILITY
 } from "../constants.js";
 import { containsYear, endYear } from "./age-service.js";
-import { getAgeForYear, getCalendar } from "./calendar-service.js";
+import { getAgeForYear, getCalendar, getParties, getParty } from "./calendar-service.js";
 import { compareDateKeys, parseKey } from "./date-service.js";
 import { linkNoteToEvent, updateNotePage } from "./journal-service.js";
 import { migrateEvents } from "./migration-service.js";
+import { isMember, partyForUser } from "./party-service.js";
+import { readAllParties, writeParty } from "./party-store-service.js";
 import { canManageEvents, canSetTimelineMode, canViewEvent, isGM } from "./permission-service.js";
 import { readPrivate, writePrivate } from "./private-store-service.js";
 import { validateEvent } from "./validation-service.js";
@@ -32,23 +36,35 @@ import { validateEvent } from "./validation-service.js";
 /**
  * All stored events this client can see, normalised and chronologically ordered.
  *
- * Player-visible events live in the world setting, which Foundry delivers to
- * everyone. GM-only events live in the GM-only store, which it does not: a
- * player's `readPrivate` returns null because the document never reaches them,
- * so the list they assemble here simply has no GM-only events in it. That is
- * the difference between this and the old arrangement, where every event was in
- * the world setting and `getVisibleEvents` filtered a list the player already
- * had in full.
+ * Player-visible shared events live in the world setting, which Foundry
+ * delivers to everyone. GM-only events live in the GM-only store and a party's
+ * events in that party's store, which it does not deliver to anyone else: a
+ * player's `readPrivate` returns null and `readAllParties` holds only their own
+ * party, because the other documents never reach them. So the list they
+ * assemble here simply lacks what they may not see. That is the difference
+ * between this and the old arrangement, where every event was in the world
+ * setting and `getVisibleEvents` filtered a list the player already had in full.
  */
 export function getEvents() {
   const shared = game.settings.get(MODULE_ID, SETTINGS.TIMELINE_EVENTS);
   const privateEvents = readPrivate()?.events ?? [];
-  return migrateEvents([...(Array.isArray(shared) ? shared : []), ...privateEvents]);
+  const partyEvents = [...readAllParties().values()].flatMap(payload => payload.events);
+  return migrateEvents([...(Array.isArray(shared) ? shared : []), ...privateEvents, ...partyEvents]);
+}
+
+/**
+ * Whether a user may see an event, as a second layer over document delivery.
+ * A party's event is for its members and the GMs.
+ */
+export function canSeeEvent(event, user = game.user) {
+  if (!canViewEvent(event, user)) return false;
+  if (!event.partyId || isGM(user)) return true;
+  return isMember(getParty(event.partyId), user?.id);
 }
 
 /** Events the given user is entitled to see. */
 export function getVisibleEvents(user = game.user) {
-  return getEvents().filter(event => canViewEvent(event, user));
+  return getEvents().filter(event => canSeeEvent(event, user));
 }
 
 /** One event by id, or null. */
@@ -57,22 +73,31 @@ export function getEvent(eventId) {
 }
 
 /**
- * Persist the whole event list, routed by visibility. GM only.
+ * Persist the whole event list, routed by visibility and party. GM only.
  *
- * An event's visibility decides where it is stored, not merely how it is drawn,
- * so changing one from GM-only to player-visible moves it between the two
- * stores. Both are written on every save because an event can cross between
- * them, and writing only the half that looks changed would leave the other
- * holding a stale copy.
+ * An event's visibility and party decide where it is stored, not merely how
+ * it is drawn, so changing either moves it between stores. Every store is
+ * written on every save because an event can cross between any two of them,
+ * and writing only the one that looks changed would leave another holding a
+ * stale copy. An event naming a party that no longer exists is shared: the
+ * alternative is a record nobody can reach.
  */
 async function writeEvents(events) {
-  const normalized = migrateEvents(events);
-  const shared = normalized.filter(event => event.visibility === VISIBILITY.PLAYERS);
+  const parties = getParties();
+  const known = new Set(parties.map(party => party.id));
+  const normalized = migrateEvents(events).map(event =>
+    event.partyId && !known.has(event.partyId) ? { ...event, partyId: null } : event);
+
   const hidden = normalized.filter(event => event.visibility !== VISIBILITY.PLAYERS);
+  const visible = normalized.filter(event => event.visibility === VISIBILITY.PLAYERS);
+  const shared = visible.filter(event => !event.partyId);
 
   const existing = readPrivate();
   await writePrivate({ ages: existing?.ages ?? [], events: hidden });
   await game.settings.set(MODULE_ID, SETTINGS.TIMELINE_EVENTS, shared);
+  for (const party of parties) {
+    await writeParty(party, { events: visible.filter(event => event.partyId === party.id) });
+  }
   return normalized;
 }
 
@@ -100,6 +125,7 @@ export async function createEvent(data) {
     // it is filtered on the way in rather than trusted for having been typed.
     description: sanitizeHTML(data.description ?? ""),
     visibility: data.visibility === VISIBILITY.PLAYERS ? VISIBILITY.PLAYERS : VISIBILITY.GM_ONLY,
+    partyId: getParty(data.partyId)?.id ?? null,
     color: data.color || DEFAULT_COLOR,
     icon: data.icon || "fa-solid fa-scroll",
     source: {
@@ -188,20 +214,23 @@ export async function deleteEvent(eventId) {
  * deleted. If the note later disappears the event keeps working; the GM-only
  * origin indicator simply reports the source as unavailable.
  *
- * A note a player wrote becomes an event every player sees: the table's own
- * record of what happened belongs on the shared timeline, so the GM's choice of
- * visibility applies only to promoting their own notes.
+ * A note a player wrote becomes an event their party sees — every player, when
+ * the world has no parties: the table's own record of what happened belongs
+ * on that table's timeline, so the GM's choice of visibility and party applies
+ * only to promoting their own notes.
  */
-export async function promoteNote(noteView, { dateKey, title, description, visibility, color, icon, shareNote } = {}) {
+export async function promoteNote(noteView, { dateKey, title, description, visibility, partyId, color, icon, shareNote } = {}) {
   if (!canManageEvents()) {
     ui.notifications.warn(t("TTA.Errors.PromoteGMOnly"));
     return null;
   }
+  const fromPlayer = isPlayerNote(noteView);
   const event = await createEvent({
     dateKey: dateKey ?? noteView.dateKey,
     title: title ?? noteView.title,
     description: description ?? noteView.content ?? "",
-    visibility: isPlayerNote(noteView) ? VISIBILITY.PLAYERS : (visibility ?? VISIBILITY.GM_ONLY),
+    visibility: fromPlayer ? VISIBILITY.PLAYERS : (visibility ?? VISIBILITY.GM_ONLY),
+    partyId: fromPlayer ? partyOfAuthor(noteView) : (partyId ?? null),
     color,
     icon,
     source: { type: EVENT_SOURCE.PROMOTED, noteUuid: noteView.uuid }
@@ -216,6 +245,35 @@ export async function promoteNote(noteView, { dateKey, title, description, visib
 /** Whether a note view was written by a player rather than a GM. */
 export function isPlayerNote(noteView) {
   return !!noteView && !noteView.isGMNote;
+}
+
+/** The id of the party a note's author belongs to, or null. */
+export function partyOfAuthor(noteView) {
+  return partyForUser(getParties(), noteView?.authorId)?.id ?? null;
+}
+
+/** How many events belong to a party, in every store this client can read. */
+export function countPartyEvents(partyId) {
+  if (!partyId) return 0;
+  return getEvents().filter(event => event.partyId === partyId).length;
+}
+
+/**
+ * Move every event of one party to another party, or to shared. GM only.
+ *
+ * Used when a party is removed, before its store is deleted; the events are
+ * still readable from the old store at that point and are rewritten into the
+ * place they are going.
+ */
+export async function reassignPartyEvents(fromPartyId, toPartyId = null) {
+  if (!canManageEvents() || !fromPartyId) return 0;
+  const events = getEvents();
+  const moving = events.filter(event => event.partyId === fromPartyId);
+  if (!moving.length) return 0;
+  const target = getParty(toPartyId)?.id ?? null;
+  await writeEvents(events.map(event => event.partyId === fromPartyId ? { ...event, partyId: target } : event));
+  log("info", `Moved ${moving.length} events from party ${fromPartyId} to ${target ?? "shared"}`);
+  return moving.length;
 }
 
 /** The shared timeline display mode. */

@@ -288,6 +288,12 @@
 }
 
 .tta .tta-tag-accent { background: var(--tta-accent-800); color: var(--tta-accent-100); }
+/* A party tag takes the party's own colour so two parties' events read apart at a glance. */
+.tta .tta-tag-party {
+  background: color-mix(in srgb, var(--tta-tint) 28%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tta-tint) 60%, transparent);
+  color: var(--tta-text);
+}
 .tta .tta-tag-outline {
   background: transparent;
   border: 1px solid var(--tta-accent);
@@ -435,6 +441,48 @@
 }
 
 .tta .tta-strip button { margin-left: auto; white-space: nowrap; font-size: 12px; }
+
+
+/* ---------- Parties ------------------------------------------------------ */
+
+/* The active party's name sits before the date as a small tinted chip. */
+.tta .tta-party-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--tta-text);
+  background: color-mix(in srgb, var(--tta-tint) 24%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tta-tint) 60%, transparent);
+}
+
+.tta .tta-party-chip::before,
+.tta .tta-party-mark {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tta-tint);
+  flex: none;
+}
+
+/* The GM's party picker carries the active party's colour on its left edge. */
+.tta .tta-party-select { box-shadow: inset 3px 0 0 var(--tta-tint); padding-left: 10px; }
+
+/* Where the other parties stand, drawn in the corner of their day cell. */
+.tta .tta-day-parties {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: flex;
+  gap: 2px;
+}
+.tta .tta-day-button { position: relative; }
 
 .tta .tta-panel {
   padding: 9px 10px;
@@ -1163,6 +1211,9 @@
 }
 
 .tta .tta-editor-controls { margin-left: auto; display: flex; gap: 2px; }
+
+/* A party's member list: a short multi-select, since a table has a handful of players. */
+.tta .tta-members { min-height: 4.5rem; max-width: 24rem; font-size: 12px; }
 
 .tta .tta-editor-description {
   display: flex;

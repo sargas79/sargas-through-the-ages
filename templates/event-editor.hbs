@@ -58,6 +58,22 @@
       {{/if}}
     </div>
 
+    {{#if partyChoices}}
+      <div class="tta-field">
+        <label for="tta-event-party">{{localize "TTA.EventEditor.PartyField"}}</label>
+        {{!-- Same arrangement as visibility: a locked party travels in a hidden input. --}}
+        <select id="tta-event-party" {{#if partyLocked}}disabled{{else}}name="partyId"{{/if}}>
+          {{#each partyChoices}}
+            <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+          {{/each}}
+        </select>
+        {{#if partyLocked}}
+          <input type="hidden" name="partyId" value="{{partyId}}">
+          <p class="tta-hint">{{localize "TTA.EventEditor.PlayerNotePartyHint"}}</p>
+        {{/if}}
+      </div>
+    {{/if}}
+
     <div class="tta-field">
       <span>{{localize "TTA.EventEditor.ColorField"}}</span>
       {{!-- The swatches are shortcuts into the colour input beside them, which

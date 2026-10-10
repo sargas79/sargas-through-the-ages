@@ -8,7 +8,7 @@ export const MODULE_ID = "sargas-through-the-ages";
 /** The id used before 3.0.0. Data stored under it is copied over on start-up. */
 export const LEGACY_MODULE_ID = "through-the-ages";
 export const MODULE_TITLE = "Sargas Through the Ages";
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export const NOTES_FOLDER_NAME = "Calendar Notes";
 
@@ -18,6 +18,13 @@ export const NOTES_FOLDER_NAME = "Calendar Notes";
  * read them. See `private-store-service.js`.
  */
 export const PRIVATE_ENTRY_NAME = "Calendar (GM only)";
+
+/**
+ * Name of a party's store entry, with `{name}` standing for the party's name.
+ * Each party has one such entry in the notes folder, readable by its members
+ * and the GMs and delivered to nobody else. See `party-store-service.js`.
+ */
+export const PARTY_ENTRY_NAME = "Calendar (party: {name})";
 
 /** World and client setting keys. */
 export const SETTINGS = {
@@ -45,14 +52,19 @@ export const FLAGS = {
   RELAY_PROBE: "relayProbe",
   /** Marks the GM-only entry, and carries its payload. */
   PRIVATE_ENTRY: "privateStore",
-  PRIVATE_DATA: "privateData"
+  PRIVATE_DATA: "privateData",
+  /** Marks a party's store entry with the party's id, and carries its payload. */
+  PARTY_ENTRY: "partyStore",
+  PARTY_DATA: "partyData"
 };
 
 /** Note visibility classifications. */
 export const VISIBILITY = {
   GM_ONLY: "gm-only",
   AUTHOR_AND_GM: "author-and-gm",
-  PLAYERS: "players"
+  PLAYERS: "players",
+  /** Notes only: the author, the GMs and the members of the note's party. */
+  PARTY: "party"
 };
 
 /** Calendar scope of a note. */
@@ -126,7 +138,14 @@ export const LIMITS = {
   MOONS_MAX: 12,
   MOON_CYCLE_MIN: 2,
   MOON_CYCLE_MAX: 1000,
-  YEAR_AFFIX_MAX: 12
+  YEAR_AFFIX_MAX: 12,
+  /**
+   * Party bounds. A party is one group of players at one point in the world's
+   * history; a table rarely runs more than two or three, and every party costs
+   * a journal entry and a date to keep in step.
+   */
+  PARTIES_MAX: 8,
+  PARTY_NAME_MAX: 60
 };
 
 /**
@@ -188,11 +207,25 @@ export const DEFAULT_CALENDAR_DATA = {
     yearSuffix: "",
     moons: []
   },
-  ages: []
+  ages: [],
+  /**
+   * Parties: groups of players that each stand at their own point in the
+   * world's history. The list is empty for a world that does not use them, and
+   * every code path then behaves as it did before parties existed. See
+   * `party-service.js`.
+   */
+  parties: [],
+  activePartyId: null
 };
 
 /** Default accent colour applied to Ages and events that define none. */
 export const DEFAULT_COLOR = "#8f3d2e";
+
+/**
+ * Accent colours handed to new parties in turn, so two parties never start
+ * out looking the same on the calendar grid.
+ */
+export const DEFAULT_PARTY_COLORS = ["#2e6a8f", "#8f3d2e", "#4f8f2e", "#7a2e8f", "#8f7a2e", "#2e8f7a", "#8f2e5c", "#5c5c8f"];
 
 /** Default accent colour applied to moons that define none. */
 export const DEFAULT_MOON_COLOR = "#c9d4e8";

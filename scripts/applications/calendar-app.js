@@ -20,15 +20,18 @@ import {
   formatTime,
   formatMonth,
   formatYear,
+  getActivePartyId,
   getAgeForYear,
   getCalendar,
-  getCurrentAge,
   getCurrentDate,
   getCurrentTime,
   getMoonPhases,
+  getParties,
+  getPartyMoment,
   getVisibleMoons,
   isConfigured,
   isWorldTimeOutOfSync,
+  setActiveParty
 } from "../services/calendar-service.js";
 import {
   addMonths,
@@ -136,10 +139,38 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
     return { year: this.viewYear, month: this.viewMonth, day: this.selectedDay };
   }
 
+  /**
+   * Where the parties that are not active stand in the viewed month, by day.
+   *
+   * The calendar is the active party's: its day is the tinted cell. A GM also
+   * sees where every other party has been left, in that party's colour; a
+   * player does not, since another group's whereabouts is the GM's to reveal.
+   * @returns {Map<number, Array<{name:string, color:string}>>}
+   */
+  #partyMarks() {
+    const marks = new Map();
+    if (!isGM()) return marks;
+    const activeId = getActivePartyId();
+    for (const party of getParties()) {
+      if (party.id === activeId) continue;
+      const date = getPartyMoment(party.id).date;
+      if (date.year !== this.viewYear || date.month !== this.viewMonth) continue;
+      if (!marks.has(date.day)) marks.set(date.day, []);
+      marks.get(date.day).push({ name: party.name, color: party.color });
+    }
+    return marks;
+  }
+
   async _prepareContext() {
     const calendar = getCalendar();
-    const current = getCurrentDate();
     const gm = isGM();
+    const parties = getParties();
+    // The calendar stands on the active party's date for everyone, and only
+    // moves to another party when a GM makes that party active.
+    const current = getCurrentDate();
+    const activePartyId = getActivePartyId();
+    const activeParty = parties.find(party => party.id === activePartyId) ?? null;
+    const partyMarks = this.#partyMarks();
 
     // Keep browsing state inside the configured bounds after a reconfiguration.
     this.viewMonth = Math.min(Math.max(1, this.viewMonth), calendar.monthsPerYear);
@@ -171,6 +202,7 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
         dateKey: dayKey(date.year, date.month, date.day),
         weekday: weekdayName(date, calendar),
         isCurrent: isSameDay(date, current),
+        parties: partyMarks.get(cell.day) ?? [],
         isSelected: cell.day === this.selectedDay,
         noteCount: notes,
         eventCount: events,
@@ -195,12 +227,19 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const dayEvents = getEventsForDay(this.viewYear, this.viewMonth, this.selectedDay);
     const monthEvents = getEventsForMonth(this.viewYear, this.viewMonth);
     const viewAge = getAgeForYear(this.viewYear);
-    const currentAge = getCurrentAge();
+    const currentAge = getAgeForYear(current.year);
     const scopes = allowedNoteScopes();
 
     return {
       isGM: gm,
       configured: isConfigured(),
+      // Everyone sees which party the calendar is standing on; a GM can switch
+      // it. Neither appears in a world without parties.
+      activeParty,
+      partyChoices: gm && parties.length > 1
+        ? parties.map(party => ({ value: party.id, selected: party.id === activePartyId, label: party.name }))
+        : null,
+      showPartyMarks: gm && parties.length > 1,
       calendar,
       weekdayNames: calendar.weekdayNames,
       weeks,
@@ -213,7 +252,7 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
       viewingCurrentMonth: isSameMonth({ year: this.viewYear, month: this.viewMonth }, current),
       currentDate: current,
       currentDateLabel: formatDate(current),
-      currentTimeLabel: formatTime(),
+      currentTimeLabel: formatTime(getCurrentTime()),
       currentAge: currentAge ? { ...currentAge, endYear: endYear(currentAge) } : null,
       viewAge: viewAge ? { ...viewAge, endYear: endYear(viewAge) } : null,
       selectedDay: this.selectedDay,
@@ -268,6 +307,31 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
     preset?.addEventListener("change", event => {
       this.timePreset = event.currentTarget.value;
     });
+    const party = this.element.querySelector("[data-party-select]");
+    party?.addEventListener("change", event => this.#activateParty(event.currentTarget));
+  }
+
+  /**
+   * Make another party the active one, from the header picker.
+   *
+   * The whole table's calendar moves to that party's date, so the GM confirms
+   * first; a declined switch puts the picker back on the party that is active.
+   */
+  async #activateParty(select) {
+    const partyId = select.value;
+    const party = getParties().find(candidate => candidate.id === partyId);
+    if (!party || partyId === getActivePartyId()) return;
+
+    const confirmed = await confirmDialog({
+      title: t("TTA.Parties.ActivateConfirmTitle"),
+      content: html`<p>${t("TTA.Parties.ActivateConfirmBody", { name: party.name })}</p>`,
+      yesLabel: t("TTA.Parties.Activate")
+    });
+    if (!confirmed) {
+      select.value = getActivePartyId() ?? "";
+      return;
+    }
+    if (await setActiveParty(partyId)) CalendarApp.onGotoCurrent.call(this);
   }
 
   /**

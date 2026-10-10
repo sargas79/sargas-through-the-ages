@@ -15,6 +15,19 @@
 
     <header class="tta-header">
       <div class="tta-header-date">
+        {{!-- The calendar stands on the active party's date. A GM with more
+              than one party switches it here; everyone else just sees whose. --}}
+        {{#if partyChoices}}
+          <select class="tta-compact tta-party-select" data-party-select aria-label="{{localize "TTA.Parties.Activate"}}"
+                  data-tooltip="{{localize "TTA.Parties.ActivateTooltip"}}" style="--tta-tint: {{activeParty.color}}">
+            {{#each partyChoices}}
+              <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+            {{/each}}
+          </select>
+        {{else if activeParty}}
+          <span class="tta-party-chip" style="--tta-tint: {{activeParty.color}}"
+                data-tooltip="{{localize "TTA.Parties.ActiveParty"}}">{{activeParty.name}}</span>
+        {{/if}}
         <span class="tta-current-date">{{currentDateLabel}}</span>
         <span class="tta-current-time">{{currentTimeLabel}}</span>
       </div>
@@ -119,6 +132,9 @@
         <div class="tta-legend">
           <span><span class="tta-dot-note" aria-hidden="true"></span>{{localize "TTA.Calendar.LegendNotes"}}</span>
           <span><span class="tta-dot-event" aria-hidden="true"></span>{{localize "TTA.Calendar.LegendEvents"}}</span>
+          {{#if showPartyMarks}}
+            <span><span class="tta-party-mark" aria-hidden="true"></span>{{localize "TTA.Parties.LegendParties"}}</span>
+          {{/if}}
           <button type="button" class="tta-ghost" data-action="openNotesFolder">{{localize "TTA.Calendar.OpenNotesFolder"}} &#x2197;</button>
         </div>
       </div>

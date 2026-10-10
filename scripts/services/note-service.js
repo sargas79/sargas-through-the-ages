@@ -13,9 +13,10 @@
 
 import { log, sanitizeHTML, t } from "../compat.js";
 import { MODULE_ID, RELAY_OPS, SCOPE, VISIBILITY } from "../constants.js";
-import { getCalendar } from "./calendar-service.js";
+import { getCalendar, getParties, getParty, getPartyForUser } from "./calendar-service.js";
 import { compareDateKeys, dayKey, monthKey, parseKey } from "./date-service.js";
 import * as journal from "./journal-service.js";
+import { isMember, partyForUser } from "./party-service.js";
 import {
   canCreateNote,
   canDeleteNote,
@@ -31,10 +32,22 @@ export function defaultVisibilityFor(user = game.user) {
   return user.isGM ? VISIBILITY.GM_ONLY : VISIBILITY.AUTHOR_AND_GM;
 }
 
+/** `canViewNote` with the party membership this file can look up. */
+function canSee(flags, user = game.user) {
+  const isPartyMember = flags?.visibility === VISIBILITY.PARTY && isMember(getParty(flags.partyId), user?.id);
+  return canViewNote(flags, user, { isPartyMember });
+}
+
+/** The members of a party, for the ownership a party note is written with. */
+function membersOf(partyId) {
+  return getParty(partyId)?.members ?? [];
+}
+
 /** Shape a note page into the plain record the templates consume. */
 function toView(record, user = game.user) {
   const { page, flags } = record;
   const parsed = parseKey(flags.dateKey);
+  const party = flags.visibility === VISIBILITY.PARTY ? getParty(flags.partyId) : null;
   return {
     uuid: page.uuid,
     id: page.id,
@@ -49,7 +62,11 @@ function toView(record, user = game.user) {
     isOwnNote: flags.authorId === user.id,
     isGMNote: !!game.users.get(flags.authorId)?.isGM,
     visibility: flags.visibility,
-    visibilityLabel: t(`TTA.Visibility.${flags.visibility}`),
+    partyId: flags.partyId ?? null,
+    partyName: party?.name ?? null,
+    visibilityLabel: party
+      ? t("TTA.Notes.VisibilityParty", { name: party.name })
+      : t(`TTA.Visibility.${flags.visibility}`),
     promoted: !!flags.timelineEventId,
     timelineEventId: flags.timelineEventId,
     createdAt: flags.createdAt,
@@ -63,14 +80,14 @@ function toView(record, user = game.user) {
 /** Every note the user may see, newest date last. */
 export function getVisibleNotes(user = game.user) {
   return journal.getAllNotePages()
-    .filter(record => canViewNote(record.flags, user))
+    .filter(record => canSee(record.flags, user))
     .map(record => toView(record, user));
 }
 
 /** Notes on one exact date key that the user may see. */
 export function getNotesForKey(dateKey, user = game.user) {
   return journal.getNotePagesForKey(dateKey)
-    .filter(record => canViewNote(record.flags, user))
+    .filter(record => canSee(record.flags, user))
     .map(record => toView(record, user))
     .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
 }
@@ -95,7 +112,7 @@ export function getMonthNoteCounts(year, month, user = game.user) {
     const parsed = parseKey(record.flags.dateKey);
     if (!parsed || parsed.year !== year || parsed.month !== month) continue;
     if (parsed.scope !== SCOPE.DAY) continue;
-    if (!canViewNote(record.flags, user)) continue;
+    if (!canSee(record.flags, user)) continue;
     counts[parsed.day] = (counts[parsed.day] ?? 0) + 1;
   }
   return counts;
@@ -116,6 +133,10 @@ export function filterNotes(notes, filter) {
     const userId = filter.slice(5);
     return notes.filter(note => note.authorId === userId);
   }
+  if (filter.startsWith("party:")) {
+    const partyId = filter.slice(6);
+    return notes.filter(note => note.visibility === VISIBILITY.PARTY && note.partyId === partyId);
+  }
   return notes;
 }
 
@@ -129,10 +150,42 @@ export function getFilterChoices() {
     { value: "month", label: t("TTA.Filters.MonthNotes") },
     { value: "promoted", label: t("TTA.Filters.Promoted") }
   ];
+  for (const party of getParties()) {
+    choices.push({ value: `party:${party.id}`, label: t("TTA.Filters.ByParty", { name: party.name }) });
+  }
   for (const user of game.users.filter(u => !u.isGM)) {
     choices.push({ value: `user:${user.id}`, label: t("TTA.Filters.ByUser", { name: user.name }) });
   }
   return choices;
+}
+
+/**
+ * The visibility a request may give a note, for the user making it.
+ *
+ * A GM chooses freely; a party note takes the party they name, or keeps the
+ * note's own. A player's note is theirs and the GMs', or shared with their
+ * own party: that is the one visibility change a player may make, and only
+ * for the party they are in. Anything else a player asks for is refused
+ * rather than quietly corrected, since a request that names another party is
+ * a request this module should not have received.
+ *
+ * @returns {{visibility:string, partyId:string|null}}
+ */
+export function resolveVisibility(user, { visibility, partyId = undefined } = {}, current = null) {
+  if (isGM(user)) {
+    const next = visibility ?? current?.visibility ?? VISIBILITY.GM_ONLY;
+    if (next !== VISIBILITY.PARTY) return { visibility: next, partyId: null };
+    const party = getParty(partyId === undefined ? current?.partyId : partyId);
+    return { visibility: VISIBILITY.PARTY, partyId: party?.id ?? null };
+  }
+
+  const own = partyForUser(getParties(), user?.id);
+  const next = visibility ?? current?.visibility ?? VISIBILITY.AUTHOR_AND_GM;
+  if (next === VISIBILITY.AUTHOR_AND_GM) return { visibility: next, partyId: null };
+  if (next === VISIBILITY.PARTY && own && (partyId === undefined || partyId === null || partyId === own.id)) {
+    return { visibility: VISIBILITY.PARTY, partyId: own.id };
+  }
+  throw new Error(t("TTA.Errors.NotePartyDenied"));
 }
 
 function assertValid(payload) {
@@ -145,36 +198,37 @@ function assertValid(payload) {
 
 /**
  * Create a note. Players may only author notes attributed to themselves, and
- * only with a visibility a player is allowed to choose.
+ * only with a visibility a player is allowed to choose: private to them and
+ * the GMs, or shared with their own party.
  */
-export async function createNote({ dateKey, title, content = "", visibility } = {}) {
+export async function createNote({ dateKey, title, content = "", visibility, partyId } = {}) {
   const scope = parseKey(dateKey)?.scope;
   if (!canCreateNote(scope)) {
     ui.notifications.warn(t("TTA.Errors.NoteCreationDenied"));
     return null;
   }
 
-  const resolvedVisibility = isGM()
-    ? (visibility ?? VISIBILITY.GM_ONLY)
-    : VISIBILITY.AUTHOR_AND_GM;
-
+  const resolved = resolveVisibility(game.user, { visibility, partyId });
   const payload = {
     dateKey,
     title: String(title ?? "").trim(),
     content,
     scope,
-    visibility: resolvedVisibility,
+    ...resolved,
     authorId: game.user.id,
     authorName: game.user.name
   };
   assertValid(payload);
 
-  if (isGM()) return journal.createNotePage(payload);
+  if (isGM()) return journal.createNotePage({ ...payload, partyMembers: membersOf(payload.partyId) });
   return request(RELAY_OPS.CREATE_NOTE, payload);
 }
 
-/** Update a note. Players may only update their own, and never its visibility. */
-export async function updateNote(pageUuid, { title, content, visibility } = {}) {
+/**
+ * Update a note. Players may only update their own, and may change its
+ * visibility only between private and shared with their own party.
+ */
+export async function updateNote(pageUuid, { title, content, visibility, partyId } = {}) {
   const page = await fromUuid(pageUuid);
   const flags = journal.readNoteFlags(page);
   if (!flags) {
@@ -186,22 +240,57 @@ export async function updateNote(pageUuid, { title, content, visibility } = {}) 
     return null;
   }
 
+  const change = visibility === undefined && partyId === undefined
+    ? {}
+    : resolveVisibility(game.user, { visibility, partyId }, flags);
   const payload = {
     pageUuid,
     title: title === undefined ? undefined : String(title).trim(),
     content,
-    visibility: isGM() ? visibility : undefined
+    ...change
   };
 
   assertValid({
     dateKey: flags.dateKey,
     scope: flags.scope,
     title: payload.title ?? page.name,
-    visibility: payload.visibility ?? flags.visibility
+    visibility: payload.visibility ?? flags.visibility,
+    partyId: payload.partyId === undefined ? flags.partyId : payload.partyId
   });
 
-  if (isGM()) return journal.updateNotePage(pageUuid, payload);
+  if (isGM()) {
+    return journal.updateNotePage(pageUuid, { ...payload, partyMembers: membersOf(payload.partyId ?? flags.partyId) });
+  }
   return request(RELAY_OPS.UPDATE_NOTE, payload);
+}
+
+/** How many notes are shared with a party, among those this client can see. */
+export function countPartyNotes(partyId) {
+  if (!partyId) return 0;
+  return journal.getAllNotePages()
+    .filter(({ flags }) => flags.visibility === VISIBILITY.PARTY && flags.partyId === partyId).length;
+}
+
+/**
+ * Move every note shared with one party to another party, or make them
+ * visible to all players when no party is named. GM only.
+ *
+ * Used when a party is removed, so its shared notes are not left naming a
+ * party nobody is in.
+ */
+export async function reassignPartyNotes(fromPartyId, toPartyId = null) {
+  if (!isGM() || !fromPartyId) return 0;
+  const target = getParty(toPartyId);
+  let moved = 0;
+  for (const { page, flags } of journal.getAllNotePages()) {
+    if (flags.visibility !== VISIBILITY.PARTY || flags.partyId !== fromPartyId) continue;
+    await journal.updateNotePage(page.uuid, target
+      ? { visibility: VISIBILITY.PARTY, partyId: target.id, partyMembers: target.members }
+      : { visibility: VISIBILITY.PLAYERS, partyId: null });
+    moved += 1;
+  }
+  if (moved) log("info", `Moved ${moved} notes from party ${fromPartyId} to ${target?.id ?? "all players"}`);
+  return moved;
 }
 
 /** Delete a note. Callers are expected to have confirmed with the user first. */
@@ -253,61 +342,82 @@ function assertRelayable(user) {
  * user who sent it is now something the server vouched for.
  */
 
+/** Relayed note creation, run on the GM's client for `user`. */
+export async function relayCreateNote(payload, user) {
+  assertRelayable(user);
+  if (!canCreateNote(payload.scope, user)) throw new Error(t("TTA.Errors.NoteCreationDenied"));
+  // The visibility is resolved against the authenticated requester, not the
+  // payload's say-so: a player gets their private note or their own party.
+  const resolved = resolveVisibility(user, { visibility: payload.visibility, partyId: payload.partyId });
+  const safe = {
+    dateKey: payload.dateKey,
+    title: String(payload.title ?? "").trim(),
+    // The body is stored as HTML and rendered back on every client, and this
+    // one did not come from the editor: it is whatever string the requesting
+    // client sent. It is filtered here, before it is written, so a world is
+    // not carrying markup that only the render path knows to defuse.
+    content: sanitizeHTML(payload.content ?? ""),
+    scope: payload.scope,
+    ...resolved,
+    authorId: user.id,
+    authorName: user.name
+  };
+  assertValid(safe);
+  const page = await journal.createNotePage({ ...safe, partyMembers: membersOf(safe.partyId) });
+  log("debug", "Created note on behalf of", user.name);
+  return page?.uuid ?? null;
+}
+
+/** Relayed note update, run on the GM's client for `user`. */
+export async function relayUpdateNote(payload, user) {
+  assertRelayable(user);
+  const page = await fromUuid(payload.pageUuid);
+  const flags = journal.readNoteFlags(page);
+  if (!flags) throw new Error(t("TTA.Errors.NoteMissing"));
+  if (!canEditNote(flags, user)) throw new Error(t("TTA.Errors.NoteEditDenied"));
+
+  const content = payload.content === undefined ? undefined : sanitizeHTML(payload.content);
+
+  // A relayed request may change visibility only between the author's private
+  // note and their own party, and `resolveVisibility` refuses anything else
+  // against the authenticated requester. A GM acting directly is unbounded.
+  const change = payload.visibility === undefined && payload.partyId === undefined
+    ? {}
+    : resolveVisibility(user, { visibility: payload.visibility, partyId: payload.partyId }, flags);
+
+  // The create handler has always validated its payload and this one never
+  // did, so a relayed edit was the way round every bound the module sets.
+  assertValid({
+    dateKey: flags.dateKey,
+    scope: flags.scope,
+    title: payload.title ?? page.name,
+    content: content ?? "",
+    visibility: change.visibility ?? flags.visibility,
+    partyId: change.partyId === undefined ? flags.partyId : change.partyId
+  });
+
+  await journal.updateNotePage(payload.pageUuid, {
+    title: payload.title,
+    content,
+    ...change,
+    partyMembers: membersOf(change.partyId ?? flags.partyId)
+  });
+  return true;
+}
+
+/** Relayed note deletion, run on the GM's client for `user`. */
+export async function relayDeleteNote(payload, user) {
+  assertRelayable(user);
+  const page = await fromUuid(payload.pageUuid);
+  const flags = journal.readNoteFlags(page);
+  if (!flags) throw new Error(t("TTA.Errors.NoteMissing"));
+  if (!canDeleteNote(flags, user)) throw new Error(t("TTA.Errors.NoteDeleteDenied"));
+  return journal.deleteNotePage(payload.pageUuid);
+}
+
 export function registerRelayHandlers() {
-  registerHandler(RELAY_OPS.CREATE_NOTE, async (payload, user) => {
-    assertRelayable(user);
-    if (!canCreateNote(payload.scope, user)) throw new Error(t("TTA.Errors.NoteCreationDenied"));
-    const safe = {
-      dateKey: payload.dateKey,
-      title: String(payload.title ?? "").trim(),
-      // The body is stored as HTML and rendered back on every client, and this
-      // one did not come from the editor: it is whatever string the requesting
-      // client sent. It is filtered here, before it is written, so a world is
-      // not carrying markup that only the render path knows to defuse.
-      content: sanitizeHTML(payload.content ?? ""),
-      scope: payload.scope,
-      visibility: VISIBILITY.AUTHOR_AND_GM,
-      authorId: user.id,
-      authorName: user.name
-    };
-    assertValid(safe);
-    const page = await journal.createNotePage(safe);
-    log("debug", "Created note on behalf of", user.name);
-    return page?.uuid ?? null;
-  });
-
-  registerHandler(RELAY_OPS.UPDATE_NOTE, async (payload, user) => {
-    assertRelayable(user);
-    const page = await fromUuid(payload.pageUuid);
-    const flags = journal.readNoteFlags(page);
-    if (!flags) throw new Error(t("TTA.Errors.NoteMissing"));
-    if (!canEditNote(flags, user)) throw new Error(t("TTA.Errors.NoteEditDenied"));
-
-    const content = payload.content === undefined ? undefined : sanitizeHTML(payload.content);
-
-    // The create handler has always validated its payload and this one never
-    // did, so a relayed edit was the way round every bound the module sets.
-    assertValid({
-      dateKey: flags.dateKey,
-      scope: flags.scope,
-      title: payload.title ?? page.name,
-      content: content ?? "",
-      visibility: flags.visibility
-    });
-
-    // A relayed request may never change visibility: only a GM acting directly can.
-    await journal.updateNotePage(payload.pageUuid, { title: payload.title, content });
-    return true;
-  });
-
-  registerHandler(RELAY_OPS.DELETE_NOTE, async (payload, user) => {
-    assertRelayable(user);
-    const page = await fromUuid(payload.pageUuid);
-    const flags = journal.readNoteFlags(page);
-    if (!flags) throw new Error(t("TTA.Errors.NoteMissing"));
-    if (!canDeleteNote(flags, user)) throw new Error(t("TTA.Errors.NoteDeleteDenied"));
-    return journal.deleteNotePage(payload.pageUuid);
-  });
-
+  registerHandler(RELAY_OPS.CREATE_NOTE, relayCreateNote);
+  registerHandler(RELAY_OPS.UPDATE_NOTE, relayUpdateNote);
+  registerHandler(RELAY_OPS.DELETE_NOTE, relayDeleteNote);
   log("debug", `${MODULE_ID} note relay handlers registered`);
 }

@@ -7,10 +7,10 @@
 
 import { createRichTextInput, log, t } from "../compat.js";
 import { DEFAULT_COLOR, MODULE_ID, SCOPE, VISIBILITY } from "../constants.js";
-import { formatDate, getCalendar } from "../services/calendar-service.js";
+import { formatDate, getCalendar, getParties } from "../services/calendar-service.js";
 import { dayKey, maxDaysInMonth, parseKey } from "../services/date-service.js";
 import { canManageEvents } from "../services/permission-service.js";
-import { createEvent, isPlayerNote, promoteNote, updateEvent } from "../services/timeline-service.js";
+import { createEvent, isPlayerNote, partyOfAuthor, promoteNote, updateEvent } from "../services/timeline-service.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -80,10 +80,21 @@ export class EventEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
         (this.sourceNote.content ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 400)
       )
       : "";
-    // A player's note always becomes a player-visible event; see promoteNote.
+    // A player's note always becomes a player-visible event for the author's
+    // party; see promoteNote.
     const visibilityLocked = !!this.sourceNote && isPlayerNote(this.sourceNote);
+    const parties = getParties();
+    const partyId = visibilityLocked ? partyOfAuthor(this.sourceNote) : (this.event?.partyId ?? null);
 
     return {
+      partyId: partyId ?? "",
+      partyLocked: visibilityLocked,
+      partyChoices: parties.length
+        ? [
+          { value: "", label: t("TTA.EventEditor.PartyShared"), selected: !partyId },
+          ...parties.map(party => ({ value: party.id, label: party.name, selected: party.id === partyId }))
+        ]
+        : null,
       event: this.event,
       isPromotion: !!this.sourceNote,
       sourceNote: this.sourceNote,
@@ -138,6 +149,7 @@ export class EventEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
     }
     const data = formData.object;
     const key = dayKey(Number(data.year), Number(data.month), Number(data.day));
+    const partyId = data.partyId || null;
 
     try {
       if (this.event) {
@@ -146,6 +158,7 @@ export class EventEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
           title: data.title,
           description: data.description,
           visibility: data.visibility,
+          partyId,
           color: data.color,
           icon: data.icon
         });
@@ -156,6 +169,7 @@ export class EventEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
           title: data.title,
           description: data.description,
           visibility: data.visibility,
+          partyId,
           color: data.color,
           icon: data.icon,
           shareNote: data.shareNote === true || data.shareNote === "true"
@@ -167,6 +181,7 @@ export class EventEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
           title: data.title,
           description: data.description,
           visibility: data.visibility,
+          partyId,
           color: data.color,
           icon: data.icon
         });
