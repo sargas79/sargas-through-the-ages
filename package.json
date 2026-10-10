@@ -1,6 +1,6 @@
 {
   "name": "sargas-through-the-ages",
-  "version": "3.0.2",
+  "version": "3.1.0",
   "description": "Foundry VTT world calendar and campaign timeline module.",
   "private": true,
   "type": "module",
