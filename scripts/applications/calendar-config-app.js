@@ -14,14 +14,16 @@ import {
   DEFAULT_MOON_COLOR,
   DEFAULT_MOON_NAMES,
   DEFAULT_MOON_PHASE_COUNT,
+  DEFAULT_PARTY_COLORS,
   DEFAULT_WEEKDAY_NAMES,
   LIMITS,
   MODULE_ID,
   MOON_PHASE_COUNTS
 } from "../constants.js";
 import { endYear, sortAges } from "../services/age-service.js";
-import { getData, saveData } from "../services/calendar-service.js";
-import { daysInMonth, toAbsoluteDay, yearWithAffixes } from "../services/date-service.js";
+import { getData, saveData, setActiveParty, setCurrentDateTime } from "../services/calendar-service.js";
+import { daysInMonth, monthName, toAbsoluteDay, yearWithAffixes } from "../services/date-service.js";
+import { findParty, partyMoment, sortParties } from "../services/party-service.js";
 import * as journal from "../services/journal-service.js";
 import * as note from "../services/note-service.js";
 import { migrateCalendarData, resizeMonthLengths, resizeNames } from "../services/migration-service.js";
@@ -96,6 +98,10 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
       removeAge: CalendarConfigApp.onRemoveAge,
       moveAgeUp: CalendarConfigApp.onMoveAgeUp,
       moveAgeDown: CalendarConfigApp.onMoveAgeDown,
+      addParty: CalendarConfigApp.onAddParty,
+      removeParty: CalendarConfigApp.onRemoveParty,
+      movePartyUp: CalendarConfigApp.onMovePartyUp,
+      movePartyDown: CalendarConfigApp.onMovePartyDown,
       resetNames: CalendarConfigApp.onResetNames,
       repairFolder: CalendarConfigApp.onRepairFolder,
       addMoon: CalendarConfigApp.onAddMoon,
@@ -163,6 +169,12 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
         endYear: endYear(age)
       })),
       hasAges: this.draft.ages.length > 0,
+      parties: this.#decorateParties(),
+      hasParties: this.draft.parties.length > 0,
+      canAddParty: this.draft.parties.length < LIMITS.PARTIES_MAX,
+      partiesMax: LIMITS.PARTIES_MAX,
+      hasPlayers: CalendarConfigApp.#players().length > 0,
+      memberRows: Math.min(Math.max(CalendarConfigApp.#players().length, 2), 6),
       moons: sortMoons(calendar.moons).map(moon => this.#decorateMoon(moon)),
       hasMoons: calendar.moons.length > 0,
       canAddMoon: calendar.moons.length < LIMITS.MOONS_MAX,
@@ -196,10 +208,57 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
     };
   }
 
+  /** Every non-GM user account, the pool a party's members are chosen from. */
+  static #players() {
+    return (game.users ?? []).filter(user => !user.isGM);
+  }
+
+  /**
+   * Party rows for the template: each with its member choices and the date it
+   * stands at.
+   *
+   * The active party stands on the campaign date, which the Current Date
+   * section above already edits, so its row says so rather than repeating the
+   * fields. Any other party's date is set from the calendar window, not here:
+   * this window holds a draft, and a date that can move while the draft sits
+   * open is not something a draft should carry.
+   */
+  #decorateParties() {
+    const { calendar, parties, activePartyId } = this.draft;
+    const live = getData();
+    const players = CalendarConfigApp.#players();
+    return sortParties(parties).map(party => {
+      const isActive = party.id === activePartyId;
+      const moment = partyMoment(live.calendar, live.parties, live.activePartyId, party.id);
+      // A party added in this window has no live record yet; it shows the
+      // draft's date, which is where it will stand once saved.
+      const date = findParty(live.parties, party.id) && !isActive ? moment.date : party.currentDate;
+      const year = yearWithAffixes(date.year, calendar) ?? t("TTA.Format.YearPlain", { year: date.year });
+      return {
+        ...party,
+        isActive,
+        dateLabel: isActive
+          ? t("TTA.Parties.StandingAtCalendar")
+          : t("TTA.Format.Date", { day: date.day, month: monthName(date.month, calendar), year }),
+        memberChoices: players.map(user => {
+          const elsewhere = parties.find(other => other.id !== party.id && other.members.includes(user.id));
+          return {
+            value: user.id,
+            selected: party.members.includes(user.id),
+            label: elsewhere ? t("TTA.Parties.InOtherParty", { name: user.name, party: elsewhere.name }) : user.name
+          };
+        })
+      };
+    });
+  }
+
   _onRender(context, options) {
     super._onRender(context, options);
     for (const input of this.element.querySelectorAll("[data-structure]")) {
       input.addEventListener("change", this.#onStructureChange.bind(this));
+    }
+    for (const select of this.element.querySelectorAll("[data-party-row] [data-field='members']")) {
+      select.addEventListener("change", this.#onMembersChange.bind(this));
     }
 
     const picker = this.element.querySelector("[data-preset-select]");
@@ -216,6 +275,21 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
   /** Counts changed: capture the draft, resize the name lists, and re-render. */
   #onStructureChange() {
     this.#readForm();
+    this.render();
+  }
+
+  /**
+   * A party's member list changed: a player picked here leaves whichever
+   * party listed them before, since a player is in one party at most. The
+   * row that changed is the one that keeps them.
+   */
+  #onMembersChange(event) {
+    this.#readForm();
+    const keeper = event.target.closest("[data-party-row]")?.dataset.partyId;
+    const kept = new Set(this.draft.parties.find(party => party.id === keeper)?.members ?? []);
+    this.draft.parties = this.draft.parties.map(party => party.id === keeper
+      ? party
+      : { ...party, members: party.members.filter(userId => !kept.has(userId)) });
     this.render();
   }
 
@@ -276,6 +350,25 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
       sortOrder: index
     }));
 
+    // Party dates are not fields here (see `#decorateParties`), so a row only
+    // carries over the date its draft record already held.
+    const parties = [...root.querySelectorAll("[data-party-row]")].map((row, index) => {
+      const existing = this.draft.parties.find(party => party.id === row.dataset.partyId);
+      return {
+        id: row.dataset.partyId,
+        name: row.querySelector("[data-field='name']")?.value ?? "",
+        color: row.querySelector("[data-field='color']")?.value || DEFAULT_COLOR,
+        members: [...(row.querySelector("[data-field='members']")?.selectedOptions ?? [])].map(option => option.value),
+        currentDate: existing?.currentDate ?? { ...previous.currentDate },
+        currentTime: existing?.currentTime ?? { ...previous.currentTime },
+        sortOrder: index
+      };
+    });
+    const checkedParty = root.querySelector("[name='activeParty']:checked")?.value;
+    const activePartyId = parties.length
+      ? (parties.find(party => party.id === checkedParty)?.id ?? parties[0].id)
+      : null;
+
     // The calendar the form is currently describing, which may have fewer
     // months or shorter ones than the stored calendar does.
     const fitToDraft = date => fitDateTo(date, monthsPerYear, monthLengths);
@@ -312,9 +405,105 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
         yearSuffix: text("[name='yearSuffix']", previous.yearSuffix ?? ""),
         moons
       },
-      ages
+      ages,
+      parties,
+      activePartyId
     };
     return this.draft;
+  }
+
+  /**
+   * Take every existing party's live date again, for a save that had to wait.
+   *
+   * The same reasoning as {@link #adoptLiveDate}: a party's date moves in the
+   * calendar window, not here, so whatever the draft held is only as fresh as
+   * the last render. A party added in this window has no live record and
+   * starts where the calendar stands, which is the natural "now" for a group
+   * that has just been named.
+   */
+  #adoptLiveParties() {
+    const live = getData();
+    const { monthsPerYear, monthLengths } = this.draft.calendar;
+    this.draft.parties = this.draft.parties.map(party => {
+      const stored = findParty(live.parties, party.id);
+      const moment = stored
+        ? partyMoment(live.calendar, live.parties, live.activePartyId, party.id)
+        : { date: this.draft.calendar.currentDate, time: this.draft.calendar.currentTime };
+      return {
+        ...party,
+        currentDate: fitDateTo(moment.date, monthsPerYear, monthLengths),
+        currentTime: moment.time
+      };
+    });
+  }
+
+  static async onAddParty() {
+    this.#readForm();
+    const parties = this.draft.parties;
+    if (parties.length >= LIMITS.PARTIES_MAX) {
+      ui.notifications.warn(t("TTA.Parties.LimitReached", { max: LIMITS.PARTIES_MAX }));
+      return;
+    }
+    const taken = new Set(parties.map(party => party.color));
+    const party = {
+      id: randomID(),
+      name: parties.length ? `${t("TTA.Parties.NewPartyName")} ${parties.length + 1}` : t("TTA.Parties.NewPartyName"),
+      color: DEFAULT_PARTY_COLORS.find(color => !taken.has(color)) ?? DEFAULT_PARTY_COLORS[parties.length % DEFAULT_PARTY_COLORS.length],
+      members: [],
+      currentDate: { ...this.draft.calendar.currentDate },
+      currentTime: { ...this.draft.calendar.currentTime },
+      sortOrder: parties.length
+    };
+    parties.push(party);
+    // The first party named takes over the campaign date as it stands.
+    if (!this.draft.activePartyId) this.draft.activePartyId = party.id;
+    this.render();
+  }
+
+  static async onRemoveParty(event, target) {
+    this.#readForm();
+    const id = target.closest("[data-party-row]")?.dataset.partyId;
+    const party = this.draft.parties.find(p => p.id === id);
+    if (!party) return;
+
+    const remaining = sortParties(this.draft.parties.filter(p => p.id !== id));
+    const isActive = this.draft.activePartyId === id;
+    let body;
+    if (!remaining.length) body = t("TTA.Parties.RemoveLastBody", { name: party.name });
+    else if (isActive) body = t("TTA.Parties.RemoveActiveBody", { name: party.name, next: remaining[0].name });
+    else body = t("TTA.Parties.RemoveBody", { name: party.name });
+
+    const confirmed = await confirmDialog({
+      title: t("TTA.Parties.RemoveTitle"),
+      content: html`<p>${body}</p>`,
+      yesLabel: t("TTA.Common.Remove"),
+      yesIcon: "fa-solid fa-trash"
+    });
+    if (!confirmed) return;
+
+    this.draft.parties = remaining.map((p, i) => ({ ...p, sortOrder: i }));
+    if (isActive) this.draft.activePartyId = remaining[0]?.id ?? null;
+    this.render();
+  }
+
+  static async onMovePartyUp(event, target) {
+    this.#moveParty(target, -1);
+  }
+
+  static async onMovePartyDown(event, target) {
+    this.#moveParty(target, 1);
+  }
+
+  #moveParty(target, delta) {
+    this.#readForm();
+    const id = target.closest("[data-party-row]")?.dataset.partyId;
+    const ordered = sortParties(this.draft.parties);
+    const index = ordered.findIndex(party => party.id === id);
+    const next = index + delta;
+    if (index < 0 || next < 0 || next >= ordered.length) return;
+    [ordered[index], ordered[next]] = [ordered[next], ordered[index]];
+    this.draft.parties = ordered.map((party, i) => ({ ...party, sortOrder: i }));
+    this.render();
   }
 
   /**
@@ -501,7 +690,9 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
     });
     if (!confirmed) return;
 
-    this.draft = data;
+    // A setting calendar says nothing about who plays in this world, so the
+    // parties stay as they are. Their dates are re-fitted on save.
+    this.draft = { ...data, parties: this.draft.parties, activePartyId: this.draft.activePartyId };
     this.presetId = id;
     this.pendingHolidays = holidays.length ? holidays : null;
     ui.notifications.info(t("TTA.Presets.Loaded", { name: t(keys.label) }));
@@ -594,7 +785,8 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
     });
     if (!confirmed) return;
 
-    this.draft = parsed.data;
+    // The file describes a calendar, not this world's players: parties stay.
+    this.draft = { ...parsed.data, parties: this.draft.parties, activePartyId: this.draft.activePartyId };
     this.pendingEvents = parsed.events;
     ui.notifications.info(t("TTA.Notifications.CalendarImported"));
     this.render();
@@ -707,9 +899,26 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
     // open, so the date to write is settled here rather than when the form
     // was read.
     this.#adoptLiveDate();
+    this.#adoptLiveParties();
+
+    // A change of active party is a swap of dates between the calendar and a
+    // party record, and `setActiveParty` is the one place that knows how to do
+    // it and whom to tell. So the structure is saved under the active party
+    // the world already has — dropped to none when that party was removed
+    // here — and the switch is made afterwards through the front door. A
+    // date the GM typed in this window belongs to the party they made active.
+    const chosenPartyId = this.draft.activePartyId;
+    const storedPartyId = getData().activePartyId;
+    const keepPartyId = findParty(this.draft.parties, storedPartyId)?.id ?? null;
 
     try {
-      await saveData(this.draft);
+      await saveData({ ...this.draft, activePartyId: keepPartyId });
+      if (chosenPartyId && chosenPartyId !== keepPartyId) {
+        await setActiveParty(chosenPartyId);
+        if (this.dateEdited) {
+          await setCurrentDateTime(this.draft.calendar.currentDate, this.draft.calendar.currentTime);
+        }
+      }
       if (Array.isArray(this.pendingEvents)) {
         await timeline.replaceEvents(this.pendingEvents);
         this.pendingEvents = null;

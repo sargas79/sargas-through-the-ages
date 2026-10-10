@@ -209,6 +209,12 @@ export const DEFAULT_CALENDAR_DATA = {
 /** Default accent colour applied to Ages and events that define none. */
 export const DEFAULT_COLOR = "#8f3d2e";
 
+/**
+ * Accent colours handed to new parties in turn, so two parties never start
+ * out looking the same on the calendar grid.
+ */
+export const DEFAULT_PARTY_COLORS = ["#2e6a8f", "#8f3d2e", "#4f8f2e", "#7a2e8f", "#8f7a2e", "#2e8f7a", "#8f2e5c", "#5c5c8f"];
+
 /** Default accent colour applied to moons that define none. */
 export const DEFAULT_MOON_COLOR = "#c9d4e8";
 

@@ -241,6 +241,81 @@
 
   <section class="tta-section">
     <div class="tta-section-head">
+      <span class="tta-kicker">{{localize "TTA.Parties.Heading"}}</span>
+      <span class="tta-meta">{{localize "TTA.Parties.Hint"}}</span>
+    </div>
+
+    {{#if hasParties}}
+      <p class="tta-hint">{{localize "TTA.Parties.ActiveHint"}}</p>
+      <ol class="tta-row-editor">
+        {{#each parties}}
+          <li class="tta-editor-row" data-party-row data-party-id="{{id}}" style="--tta-tint: {{color}}">
+            <div class="tta-editor-main">
+              <label class="tta-grow">
+                <span>{{localize "TTA.Parties.Name"}}</span>
+                <input type="text" data-field="name" maxlength="{{../limits.PARTY_NAME_MAX}}" value="{{name}}">
+              </label>
+              <label class="tta-color">
+                <span>{{localize "TTA.Parties.Color"}}</span>
+                <input type="color" data-field="color" value="{{color}}">
+              </label>
+              <p class="tta-editor-derived">
+                <span>{{localize "TTA.Parties.StandingAt"}}</span>
+                <strong class="tta-num">{{dateLabel}}</strong>
+              </p>
+            </div>
+
+            <label class="tta-editor-description">
+              <span>{{localize "TTA.Parties.Members"}}</span>
+              {{#if ../hasPlayers}}
+                <select multiple data-field="members" class="tta-members" size="{{../memberRows}}"
+                        aria-label="{{localize "TTA.Parties.Members"}} {{name}}">
+                  {{#each memberChoices}}
+                    <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+                  {{/each}}
+                </select>
+                <span class="tta-meta">{{localize "TTA.Parties.MembersHint"}}</span>
+              {{else}}
+                <span class="tta-meta">{{localize "TTA.Parties.NoPlayers"}}</span>
+              {{/if}}
+            </label>
+
+            <div class="tta-editor-footer">
+              <label class="tta-checkbox">
+                <input type="radio" name="activeParty" value="{{id}}" {{#if isActive}}checked{{/if}}>
+                <span>{{localize "TTA.Parties.Active"}}</span>
+              </label>
+              <span class="tta-editor-controls">
+                <button type="button" class="tta-icon-only" data-action="movePartyUp"
+                        data-tooltip="{{localize "TTA.Common.MoveUp"}}" aria-label="{{localize "TTA.Common.MoveUp"}}">
+                  <i class="fa-solid fa-arrow-up" aria-hidden="true"></i>
+                </button>
+                <button type="button" class="tta-icon-only" data-action="movePartyDown"
+                        data-tooltip="{{localize "TTA.Common.MoveDown"}}" aria-label="{{localize "TTA.Common.MoveDown"}}">
+                  <i class="fa-solid fa-arrow-down" aria-hidden="true"></i>
+                </button>
+                <button type="button" class="tta-icon-only tta-danger" data-action="removeParty"
+                        data-tooltip="{{localize "TTA.Common.Remove"}}" aria-label="{{localize "TTA.Common.Remove"}}">
+                  <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                </button>
+              </span>
+            </div>
+          </li>
+        {{/each}}
+      </ol>
+    {{else}}
+      <p class="tta-empty">{{localize "TTA.Parties.NoParties"}}</p>
+    {{/if}}
+
+    {{#if canAddParty}}
+      <div><button type="button" data-action="addParty">{{localize "TTA.Parties.AddParty"}}</button></div>
+    {{else}}
+      <p class="tta-hint">{{localize "TTA.Parties.LimitHint" max=partiesMax}}</p>
+    {{/if}}
+  </section>
+
+  <section class="tta-section">
+    <div class="tta-section-head">
       <span class="tta-kicker">{{localize "TTA.Moons.Heading"}}</span>
       <span class="tta-meta">{{localize "TTA.Moons.Hint"}}</span>
     </div>

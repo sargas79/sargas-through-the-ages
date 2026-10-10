@@ -1163,6 +1163,9 @@
 
 .tta .tta-editor-controls { margin-left: auto; display: flex; gap: 2px; }
 
+/* A party's member list: a short multi-select, since a table has a handful of players. */
+.tta .tta-members { min-height: 4.5rem; max-width: 24rem; font-size: 12px; }
+
 .tta .tta-editor-description {
   display: flex;
   flex-direction: column;
