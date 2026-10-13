@@ -6,6 +6,16 @@ All notable changes to Sargas Through the Ages are documented here. The format f
 
 ### Added
 
+- A **Birthright (Anuire)** setting calendar: the Anuirean calendar of Cerilia, with twelve 32-day months, the four festival days at the equinoxes and solstices, the eight-day week, a moon that is new at the start of every month, Ages from Deismaar to the present, and 9 holiday notes. Dated 1524 HC (551 MR).
+
+### Changed
+
+- A moon's cycle length in the configuration window now accepts any fraction, not only two decimal places, so a cycle such as Birthright's 388/12 days saves as loaded.
+
+## [3.2.0] - 2026-10-10
+
+### Added
+
 - **Parties**: the stored calendar now carries a list of parties, each a named group of players with its own date and clock, and an active-party pointer. Stored data moves to schema 6; a world that defines no parties is unchanged in every other respect.
 - Every date and time operation (`setCurrentDateTime`, `advanceTime`, `advanceDays` and the rest) takes an optional `partyId`. The active party's changes go through Foundry world time as before; another party's change moves only that party's record and fires `sargas-through-the-ages.partyTimeChanged` rather than `timeChanged`, so companion modules never mistake it for time passing at the table. `setActiveParty` swaps which party the calendar stands on, in one write, without touching world time, and fires `sargas-through-the-ages.activePartyChanged`. The `timeChanged` payload gains `partyId`.
 - A **Parties** section in the configuration window: add, name, colour and order parties, pick their members from the world's players, and choose the active party. The calendar stands on the active party's date for everyone and moves only when a GM switches the active party from the calendar header; the header names the active party, and a GM also sees where the other parties stand on the month grid.
@@ -211,6 +221,8 @@ Initial release, targeting Foundry VTT v14 build 366.
 - Full English localisation and a versioned, idempotent data-migration framework.
 - Public API at `game.modules.get("through-the-ages").api`.
 
+[3.2.0]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v3.2.0
+[3.1.0]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v3.1.0
 [3.0.2]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v3.0.2
 [3.0.1]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v3.0.1
 [3.0.0]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v3.0.0
