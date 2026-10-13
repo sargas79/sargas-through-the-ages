@@ -1,7 +1,7 @@
 /**
  * Eberron — the Galifar calendar, dated in Years of the Kingdom.
  *
- * The only one of the six settings that fits without compromise: twelve months
+ * The only one of the seven settings that fits without compromise: twelve months
  * of twenty-eight days, a seven-day week, and a 336-day year that is exactly
  * forty-eight weeks long, so no date ever drifts against its weekday.
  */
