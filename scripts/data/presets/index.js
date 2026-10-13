@@ -11,6 +11,7 @@
  * Nothing here touches Foundry globals, so the whole set is unit testable.
  */
 
+import { ANUIRE } from "./anuire.js";
 import { DARK_SUN } from "./darksun.js";
 import { EBERRON } from "./eberron.js";
 import { GOLARION } from "./golarion.js";
@@ -25,6 +26,7 @@ export const CALENDAR_PRESETS = [
   EBERRON,
   GREYHAWK,
   DARK_SUN,
+  ANUIRE,
   GREGORIAN
 ];
 

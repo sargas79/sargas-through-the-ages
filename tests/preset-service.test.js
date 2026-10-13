@@ -25,7 +25,7 @@ function phaseOn(id, moonName, date) {
 
 describe("the bundled preset set", () => {
   it("offers every setting exactly once", () => {
-    assert.deepEqual(PRESET_IDS, ["harptos", "golarion", "eberron", "greyhawk", "darksun", "gregorian"]);
+    assert.deepEqual(PRESET_IDS, ["harptos", "golarion", "eberron", "greyhawk", "darksun", "anuire", "gregorian"]);
     assert.equal(new Set(PRESET_IDS).size, PRESET_IDS.length);
   });
 
@@ -110,6 +110,13 @@ describe("preset weekday anchors", () => {
     const calendar = buildPresetData("greyhawk").calendar;
     assert.equal(weekdayName({ year: 591, month: 1, day: 1 }, calendar), "Starday");
   });
+
+  it("opens the Anuirean spring months on a Firlen", () => {
+    const calendar = buildPresetData("anuire").calendar;
+    for (const month of [2, 3, 4]) {
+      assert.equal(weekdayName({ year: 1524, month, day: 1 }, calendar), "Firlen");
+    }
+  });
 });
 
 describe("preset moon anchors", () => {
@@ -131,6 +138,18 @@ describe("preset moon anchors", () => {
   it("starts the Athasian moons new on their recorded nights", () => {
     assert.equal(phaseOn("darksun", "Ral", { year: 1, month: 1, day: 13 }), "New");
     assert.equal(phaseOn("darksun", "Guthay", { year: 1, month: 2, day: 2 }), "New");
+  });
+
+  it("opens every Anuirean month on the new moon, festivals and all", () => {
+    for (const year of [1524, 1525, 2024]) {
+      for (const month of [2, 3, 4, 6, 7, 8, 10, 11, 12, 14, 15, 16]) {
+        assert.equal(phaseOn("anuire", "The Moon", { year, month, day: 1 }), "New", `${year}-${month}`);
+      }
+    }
+  });
+
+  it("brings the Anuirean moon full on the 17th of Erntenir", () => {
+    assert.equal(phaseOn("anuire", "The Moon", { year: 1524, month: 10, day: 17 }), "Full");
   });
 
   it("starts Somal new on 7 Abadius 4710 AR", () => {
@@ -164,6 +183,7 @@ describe("preset era labels", () => {
     assert.equal(suffix("eberron"), "YK");
     assert.equal(suffix("greyhawk"), "CY");
     assert.equal(suffix("darksun"), "FY");
+    assert.equal(suffix("anuire"), "HC");
     assert.equal(suffix("gregorian"), "");
   });
 

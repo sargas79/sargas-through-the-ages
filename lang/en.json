@@ -391,6 +391,13 @@
           "YearNames": "Athas names each year from a repeating cycle of seventy-six, such as Ral’s Fury. This module has no year names, so years are shown as numbers."
         }
       },
+      "anuire": {
+        "Label": "Birthright (Anuire)",
+        "Description": "The Anuirean calendar of Cerilia: twelve months of thirty-two days with a festival day at each equinox and solstice, an eight-day week, and a moon that is new at the start of every month. Dated 1524 HC (551 MR).",
+        "Caveat": {
+          "Week": "In Cerilia the four festival days fall outside the week, so every month begins on Firlen. This module counts weekdays through every day, so each festival pushes the week back a day: the months of spring begin on Firlen in 1524 HC, but later months and years drift."
+        }
+      },
       "gregorian": {
         "Label": "Gregorian (Earth)",
         "Description": "The real-world calendar, with the Moon. Dated 1 January 2026.",

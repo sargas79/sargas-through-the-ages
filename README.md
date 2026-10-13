@@ -14,8 +14,8 @@ The module is system-agnostic — it adds no game mechanics and works in any v14
 ## Features
 
 - **Setting calendars**: ready-made presets for the Forgotten Realms, Pathfinder,
-  Eberron, Greyhawk, Dark Sun and the real-world Gregorian calendar, with their
-  months, moons, eras and holidays already dated.
+  Eberron, Greyhawk, Dark Sun, Birthright and the real-world Gregorian calendar, with
+  their months, moons, eras and holidays already dated.
 - A custom calendar: months per year, month names and lengths, weekday names, and the
   weekday the calendar's first year begins on. Months may differ in length, so
   festival days and short months can stand between the long ones.
@@ -170,6 +170,7 @@ holiday notes, and press **Load preset**.
 | Eberron (Galifar) | 12 months of 28 days, 7-day week | 336, from 998 YK | all twelve, 28 days each |
 | Greyhawk (Common Year) | 12 months of 28 days with 4 festival weeks | 364, from 591 CY | Luna 28 days, Celene 91 days |
 | Dark Sun (Athas) | 12 months of 30 days with 3 five-day sun weeks, 6-day week | 375, from Free Year 1 | Ral 34 days, Guthay 125 days |
+| Birthright (Anuire) | 12 months of 32 days with 4 festival days between them, 8-day week | 388, from 1524 HC | the Moon, new at the start of every month |
 | Gregorian (Earth) | The real calendar, 7-day week | 365, from 1 January 2026 | the Moon, 29.53 days |
 
 A preset loads into the configuration editor rather than writing straight to the
@@ -181,16 +182,18 @@ delete a moon or adjust the starting year before saving, and the result is yours
 Each preset also carries an Age list covering its setting's eras, and a year suffix
 so dates read as `1495 DR` rather than `Year 1495`.
 
-**Holidays.** Eberron ships 29 holiday notes and the Forgotten Realms 9; Greyhawk and
-Dark Sun mark their festivals; Pathfinder and Gregorian ship none. Holidays are
-created as ordinary player-visible calendar notes in the preset's starting year, and
-only when the checkbox is ticked. They do not repeat in later years — copy or recreate
+**Holidays.** Eberron ships 29 holiday notes, and the Forgotten Realms and Birthright 9
+each; Greyhawk and Dark Sun mark their festivals; Pathfinder and Gregorian ship none.
+Holidays are created as ordinary player-visible calendar notes in the preset's starting
+year, and only when the checkbox is ticked. They do not repeat in later years — copy or recreate
 them if you want them again.
 
 **Where presets are approximate.** This module has no leap years, so Golarion and the
 Gregorian calendar run 365 days every year and slip a day against reality every four
-years, and Harptos loses Shieldmeet entirely. Dark Sun's 76-year cycle of year names
-has no equivalent here. Greyhawk's Luna is full at Richfest but cannot also be full at
+years, and Harptos loses Shieldmeet entirely. Birthright's four festival days fall
+outside the week in the setting, but this module counts weekdays through them, so only
+the spring months of 1524 HC begin on Firlen as canon says. Dark Sun's 76-year cycle
+of year names has no equivalent here. Greyhawk's Luna is full at Richfest but cannot also be full at
 the other three festivals, which stand 91 days apart. Eberron's twelve moons share one
 staggered 28-day cycle, because a 28-day cycle inside a 28-day month cannot put each
 moon full in its own namesake month. The dialog repeats whichever of these applies
