@@ -2,6 +2,12 @@
 
 All notable changes to Sargas Through the Ages are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Releases are prepared with `npm run release:prepare -- X.Y.Z`, which bumps the version and stamps the CHANGELOG in the commit that gets tagged. The release workflow no longer stamps the changelog itself, which reached only the packaged copy and left `main` listing published releases as unreleased; it now refuses a tag whose changelog was not prepared. The manifest check fails a branch whose newest changelog section names a version other than `module.json`'s.
+
 ## [3.4.0] - 2026-10-14
 
 ### Added

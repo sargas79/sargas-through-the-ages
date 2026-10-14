@@ -426,8 +426,9 @@ node tools/check-manifest.mjs
 `check-manifest.mjs` guards the packaging mistakes that stay invisible until a
 release is already published: a missing field, an id that is not a valid package
 slug, `module.json`, `package.json` and the `download` URL disagreeing on the
-version, no cover image for the directory listing, or a script, stylesheet or
-language file that the manifest declares but the tree does not hold. CI runs it on
+version, a CHANGELOG whose newest section names a different version, no cover image
+for the directory listing, or a script, stylesheet or language file that the
+manifest declares but the tree does not hold. CI runs it on
 every push and pull request, and the release workflow runs it before it builds.
 
 The pure services — date arithmetic, Ages, validation, migrations — carry unit tests
@@ -486,20 +487,24 @@ uses only Foundry's public world-time API and has no game-system dependencies.
 
 The published version comes from the git tag and nothing else.
 
-1. Land the release's changes on `main`, with their entries under a
-   `## [Unreleased]` heading in the CHANGELOG — or under `## [X.Y.Z] - YYYY-MM-DD`
-   when the number is already decided.
-2. Set the same `X.Y.Z` in `module.json` (both `version` and the `download` URL) and
-   in `package.json`, then run `node tools/check-manifest.mjs`.
-3. Tag `vX.Y.Z` and push it. If tags cannot be pushed from where you are, run
-   the **Release** workflow by hand with the tag name; it creates the tag on the
-   dispatched commit when it does not exist yet.
+1. Land the release's changes on `main`, with their entries under the
+   `## [Unreleased]` heading in the CHANGELOG.
+2. On a branch, run `npm run release:prepare -- X.Y.Z`. It sets `X.Y.Z` in
+   `module.json` (both `version` and the `download` URL) and in `package.json`, and
+   renames `[Unreleased]` to `[X.Y.Z]` with today's date and a link to the release.
+   Commit that and merge it to `main`.
+3. Tag the merge commit `vX.Y.Z` and push the tag. If tags cannot be pushed from
+   where you are, run the **Release** workflow by hand with the tag name; it creates
+   the tag on the dispatched commit when it does not exist yet.
 
 The release workflow runs the tests and the manifest check, stamps the tag's version
-onto `module.json`, reconciles the CHANGELOG — renaming `[Unreleased]` to the tag's
-version, or refusing outright if the newest section names a different one — and
-publishes `module.zip` and `module.json` as release assets, with that changelog
-section as the release notes.
+onto the packaged `module.json`, and publishes `module.zip` and `module.json` as
+release assets, with the tag's CHANGELOG section as the release notes. It refuses a
+tag whose commit was not prepared — a CHANGELOG still headed `[Unreleased]`, or
+naming another version — so the changelog on `main` always matches what was
+released. The manifest check also runs on every pull request and fails when the
+CHANGELOG's newest section is neither `[Unreleased]` nor `module.json`'s version,
+dated and linked.
 
 The `manifest` URL never changes: it always resolves to the newest release's
 `module.json`, which is the URL registered with the Foundry package directory.

@@ -82,7 +82,7 @@ jobs:
             fs.writeFileSync("module.json", JSON.stringify(manifest, null, 2) + "\n");
           '
 
-      - name: Reconcile the changelog with the tag
+      - name: Write the release notes from the changelog
         env:
           TTA_VERSION: ${{ steps.version.outputs.value }}
         run: node .github/scripts/release-changelog.mjs "$TTA_VERSION" release-notes.md
