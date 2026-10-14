@@ -2,7 +2,13 @@
 
 All notable changes to Sargas Through the Ages are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.4.0] - 2026-10-14
+
+### Added
+
+- The Birthright (Anuire) preset now ships 20 holiday notes, up from 9. The new ones are the festivals the setting dates by the Anuirean calendar: the Betrayal of Man, the Foregathering of the Erebannien, Kira's Dance, the Day of Revelry, El-Arrasi's Day, High Summer's Fest, the Challenge of Shaene, the Burning of the Shade, the Call of Days, All Shadow's Fled and Gretchen's Flight.
+
+## [3.3.0] - 2026-10-13
 
 ### Added
 
@@ -221,6 +227,8 @@ Initial release, targeting Foundry VTT v14 build 366.
 - Full English localisation and a versioned, idempotent data-migration framework.
 - Public API at `game.modules.get("through-the-ages").api`.
 
+[3.4.0]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v3.4.0
+[3.3.0]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v3.3.0
 [3.2.0]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v3.2.0
 [3.1.0]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v3.1.0
 [3.0.2]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v3.0.2
