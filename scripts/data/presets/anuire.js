@@ -85,6 +85,8 @@ export const ANUIRE = {
       color: "#3f6fa8"
     }
   ],
+  // Dated as the Book of Days dates them. Festivals defined by a weekday or the
+  // moon are placed where canon puts them in a month that opens on a Firlen.
   holidays: [
     {
       month: 1, day: 1, days: 1, title: "The Day of Rebirth",
@@ -93,15 +95,65 @@ export const ANUIRE = {
         + " friendships.</p>"
     },
     {
+      month: 2, day: 1, days: 1, title: "The Betrayal of Man",
+      content: "<p>Remembered by the elves of Anuire on the day after the spring equinox, the"
+        + " day men turned on the Sidhelien. Riders of the gheallie Sidhe hunt men in its"
+        + " memory.</p>"
+    },
+    {
+      month: 2, day: 17, days: 1, title: "Foregathering of the Erebannien",
+      content: "<p>Held in Aerenwe at the standing stones of Shadowgreen from the first full moon"
+        + " after the Day of Rebirth. The rangers of the Erebannien gather with priests of Erik"
+        + " and Ruornil and with bards for feasting, hunting, a market, archery and"
+        + " wrestling.</p>"
+    },
+    {
+      month: 3, day: 3, days: 1, title: "Kira's Dance",
+      content: "<p>Kept by the followers of Eloele for Kira, a small Vos warrior who stole a ham"
+        + " from the tribe that raided her own and led its warriors on a chase across"
+        + " ice she had broken that morning.</p>"
+    },
+    {
+      month: 3, day: 17, days: 2, title: "The Day of Revelry",
+      content: "<p>The most boisterous elven festival, held midway between the spring equinox"
+        + " and the summer solstice. Elves, faerie folk and their forest friends feast and"
+        + " dance, and some say the second day is for recovering. Humans are not"
+        + " encouraged to attend.</p>"
+    },
+    {
+      month: 4, day: 12, days: 1, title: "El-Arrasi's Day",
+      content: "<p>The Khinasi remember el-Arrasi's victory over the Emperor Alandalae, which won"
+        + " the Basarji near-independence from Anuire. El-Arrasi was poisoned by the Sons of the"
+        + " Serpent on the same day twelve years later.</p>"
+    },
+    {
+      month: 4, day: 28, days: 7, title: "High Summer's Fest",
+      content: "<p>Held at Dhalsiel in Mhoried from five days before the Night of Fire to the day"
+        + " after. A great hunt and feast open days of footraces, archery, riding and wrestling"
+        + " among Erik's rangers, and the bards sing of the victors.</p>"
+    },
+    {
       month: 5, day: 1, days: 1, title: "The Night of Fire",
       content: "<p>Haelyn's Festival at the summer solstice, when falling stars streak the sky."
         + " Marriages made on this day are said to be blessed by the gods. Sacred to Erik,"
         + " Haelyn and Cuiraecen.</p>"
     },
     {
+      month: 6, day: 18, days: 1, title: "The Challenge of Shaene",
+      content: "<p>Cuiraecen's valiants go questing in honour of Shaene, who rode out alone to"
+        + " face an ogre while the village hunters were still planning their traps.</p>"
+    },
+    {
       month: 8, day: 22, days: 1, title: "Anniversary of Deismaar",
-      content: "<p>The anniversary of the Battle of Mount Deismaar, kept across Cerilia. Most"
-        + " celebrations honour the ascent of the new gods rather than the battle itself.</p>"
+      content: "<p>The anniversary of the Battle of Mount Deismaar, kept across Cerilia and the"
+        + " holiest day in Haelyn's calendar. Most celebrations honour the ascent of the new"
+        + " gods rather than the battle itself.</p>"
+    },
+    {
+      month: 8, day: 30, days: 1, title: "The Burning of the Shade",
+      content: "<p>A Vos festival a week after the anniversary of Deismaar. A Shade, usually a"
+        + " scarecrow draped in black, is burnt on a great bonfire in contempt of the Lost,"
+        + " Azrai's necromancers, whom the Vos blame for the defeat.</p>"
     },
     {
       month: 9, day: 1, days: 1, title: "The Veneration of the Sleeping",
@@ -119,10 +171,23 @@ export const ANUIRE = {
         + " Night.</p>"
     },
     {
+      month: 12, day: 31, days: 3, title: "The Call of Days",
+      content: "<p>A three-day festival of lights in Boeruine, above all in Calant, ending on the"
+        + " Eve of the Dead. The Northern Imperial Temple hands out flowers from its holy"
+        + " gardens with alms, and a great bonfire burns inside a circle of standing"
+        + " stones.</p>"
+    },
+    {
       month: 13, day: 1, days: 1, title: "The Eve of the Dead",
       content: "<p>The winter solstice, the one night Haelyn's constellation hides below the"
         + " horizon, and a night of frantic prayer against the Shadow World. Sacred to"
         + " Belinik, Nesirie, Kartathok and the senior faithful of Ruornil.</p>"
+    },
+    {
+      month: 14, day: 8, days: 1, title: "All Shadow's Fled",
+      content: "<p>Held on the Taelen after the Eve of the Dead, when the undead are said to"
+        + " return to the Shadow World. Local lords keep it as a public festival to coax"
+        + " frightened peasants back out of doors.</p>"
     },
     {
       month: 15, day: 32, days: 1, title: "The Feast of Faniele",
@@ -131,7 +196,14 @@ export const ANUIRE = {
     },
     {
       month: 16, day: 6, days: 1, title: "The Day of Holy Justice",
-      content: "<p>A holy day of Haelyn's faithful.</p>"
+      content: "<p>The day the Book of Laws, Haelyn's most sacred text, appeared in the"
+        + " Avelerine Cathedral, his first temple.</p>"
+    },
+    {
+      month: 16, day: 15, days: 1, title: "Gretchen's Flight",
+      content: "<p>The Rjurik remember Gretchen, a young druid who took the form of a deer to"
+        + " lead goblins away from her starving tribe and ran to Viborg to bring help,"
+        + " dying of exhaustion once her message was delivered.</p>"
     }
   ]
 };
