@@ -148,8 +148,13 @@ describe("preset moon anchors", () => {
     }
   });
 
-  it("brings the Anuirean moon full on the 17th of Erntenir", () => {
-    assert.equal(phaseOn("anuire", "The Moon", { year: 1524, month: 10, day: 17 }), "Full");
+  it("holds the Anuirean moon-dated festivals under a full moon", () => {
+    const fullMoonFestivals = ["Foregathering of the Erebannien", "High Festival of the Autumn Moon"];
+    for (const title of fullMoonFestivals) {
+      const holiday = buildPresetHolidays("anuire").find(h => h.title === title);
+      assert.ok(holiday, `missing ${title}`);
+      assert.equal(phaseOn("anuire", "The Moon", parseKey(holiday.dateKey)), "Full", title);
+    }
   });
 
   it("starts Somal new on 7 Abadius 4710 AR", () => {

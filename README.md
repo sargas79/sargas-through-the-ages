@@ -182,8 +182,8 @@ delete a moon or adjust the starting year before saving, and the result is yours
 Each preset also carries an Age list covering its setting's eras, and a year suffix
 so dates read as `1495 DR` rather than `Year 1495`.
 
-**Holidays.** Eberron ships 29 holiday notes, and the Forgotten Realms and Birthright 9
-each; Greyhawk and Dark Sun mark their festivals; Pathfinder and Gregorian ship none.
+**Holidays.** Eberron ships 29 holiday notes, Birthright 20 and the Forgotten Realms 9;
+Greyhawk and Dark Sun mark their festivals; Pathfinder and Gregorian ship none.
 Holidays are created as ordinary player-visible calendar notes in the preset's starting
 year, and only when the checkbox is ticked. They do not repeat in later years — copy or recreate
 them if you want them again.
