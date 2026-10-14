@@ -123,7 +123,7 @@ export const ANUIRE = {
     {
       month: 4, day: 12, days: 1, title: "El-Arrasi's Day",
       content: "<p>The Khinasi remember el-Arrasi's victory over the Emperor Alandalae, which won"
-        + " the Basarji their freedom from Anuire. El-Arrasi was poisoned by the Sons of the"
+        + " the Basarji near-independence from Anuire. El-Arrasi was poisoned by the Sons of the"
         + " Serpent on the same day twelve years later.</p>"
     },
     {
