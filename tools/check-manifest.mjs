@@ -9,12 +9,15 @@
  * The release version is not its business: the release workflow derives that from
  * the tag. What is checked here is that the repository is internally consistent —
  * `module.json`, `package.json` and the `download` URL naming one version between
- * them — so whatever is read straight from a branch resolves.
+ * them — so whatever is read straight from a branch resolves — and that the
+ * CHANGELOG's newest section is either still [Unreleased] or that same version,
+ * dated and linked, ready to tag.
  *
  * Usage: node tools/check-manifest.mjs
  */
 
 import { readFileSync, existsSync } from "node:fs";
+import { changelogProblems } from "./changelog.mjs";
 
 const manifest = JSON.parse(readFileSync("module.json", "utf8"));
 const pkg = JSON.parse(readFileSync("package.json", "utf8"));
@@ -68,6 +71,8 @@ const declared = [
 for (const path of declared) {
   if (!existsSync(path)) errors.push(`module.json declares "${path}", which does not exist.`);
 }
+
+errors.push(...changelogProblems(readFileSync("CHANGELOG.md", "utf8"), manifest.version));
 
 if (errors.length) {
   console.error("Manifest check failed:");
