@@ -10,13 +10,15 @@
 
 export const REPOSITORY = "sargas79/sargas-through-the-ages";
 
-const HEADING = /^## \[([^\]]+)\](?: - (\d{4}-\d{2}-\d{2}))?\s*$/m;
+// The heading text is captured without its line ending, so stamping it leaves a
+// CRLF intact; `\s*$` would also have swallowed the blank line under it.
+const HEADING = /^(## \[([^\]]+)\](?: - (\d{4}-\d{2}-\d{2}))?)[ \t]*\r?$/m;
 const SEMVER = /^\d+\.\d+\.\d+$/;
 
 /** The newest section's heading, or null when the changelog has none. */
 export function newestHeading(text) {
   const match = text.match(HEADING);
-  return match ? { name: match[1], date: match[2] ?? null, line: match[0] } : null;
+  return match ? { name: match[2], date: match[3] ?? null, line: match[1] } : null;
 }
 
 /** The link reference line for a released version. */

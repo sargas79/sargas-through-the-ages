@@ -35,6 +35,14 @@ describe("stamping a release", () => {
     assert.ok(!stamped.includes("[Unreleased]"));
   });
 
+  it("keeps the blank line under the heading, with LF or CRLF endings", () => {
+    for (const eol of ["\n", "\r\n"]) {
+      const text = PENDING.split("\n").join(eol);
+      const expected = ["## [1.2.0] - 2026-03-04", "", "### Added"].join(eol);
+      assert.ok(stampRelease(text, "1.2.0", "2026-03-04").includes(expected), JSON.stringify(eol));
+    }
+  });
+
   it("refuses when there is nothing unreleased", () => {
     const stamped = stampRelease(PENDING, "1.2.0", "2026-03-04");
     assert.throws(() => stampRelease(stamped, "1.3.0", "2026-03-05"), /no \[Unreleased\]/);
