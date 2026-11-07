@@ -6,7 +6,7 @@
  * client. Only the GM time controls change the shared campaign date.
  */
 
-import { confirmDialog, enrichHTML, html, isDebug, log, promptForm, renderTemplate, t, trustedHTML } from "../compat.js";
+import { confirmDialog, enrichHTML, html, isDebug, log, playEntrance, promptForm, renderTemplate, t, trustedHTML } from "../compat.js";
 import { MODULE_ID, SCOPE } from "../constants.js";
 import { endYear } from "../services/age-service.js";
 import {
@@ -302,6 +302,7 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   _onRender(context, options) {
     super._onRender(context, options);
+    playEntrance(this, options);
     this.#bindDetailListeners();
     const preset = this.element.querySelector("[data-time-preset]");
     preset?.addEventListener("change", event => {

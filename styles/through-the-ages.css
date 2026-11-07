@@ -332,6 +332,16 @@
   height: 100%;
   min-height: 0;
   gap: 0;
+}
+
+/*
+ * The entrance plays only while the window is opening (see playEntrance in
+ * compat.js). Set on the part itself, it would replay on every re-render and
+ * the window would flash whenever anything changed.
+ */
+.tta.tta-entering .tta-layout,
+.tta.tta-entering .tta-form-part,
+.tta.tta-entering .tta-config-part {
   animation: tta-in 160ms ease-out;
 }
 
@@ -1241,7 +1251,6 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  animation: tta-in 160ms ease-out;
 }
 
 /* The footer never scrolls away with the body above it. */

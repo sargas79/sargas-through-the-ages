@@ -7,7 +7,7 @@
  * could strand existing notes or events require an explicit confirmation.
  */
 
-import { confirmDialog, html, log, promptForm, randomID, t, trustedHTML } from "../compat.js";
+import { confirmDialog, html, log, playEntrance, promptForm, randomID, t, trustedHTML } from "../compat.js";
 import {
   DEFAULT_COLOR,
   DEFAULT_MONTH_NAMES,
@@ -262,6 +262,7 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
 
   _onRender(context, options) {
     super._onRender(context, options);
+    playEntrance(this, options);
     for (const input of this.element.querySelectorAll("[data-structure]")) {
       input.addEventListener("change", this.#onStructureChange.bind(this));
     }

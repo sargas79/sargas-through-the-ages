@@ -5,7 +5,7 @@
  * title, date and content excerpt, and records a link back to the source note.
  */
 
-import { createRichTextInput, log, t } from "../compat.js";
+import { createRichTextInput, log, playEntrance, t } from "../compat.js";
 import { DEFAULT_COLOR, MODULE_ID, SCOPE, VISIBILITY } from "../constants.js";
 import { formatDate, getCalendar, getParties } from "../services/calendar-service.js";
 import { dayKey, maxDaysInMonth, parseKey } from "../services/date-service.js";
@@ -126,6 +126,7 @@ export class EventEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   _onRender(context, options) {
     super._onRender(context, options);
+    playEntrance(this, options);
     const host = this.element.querySelector("[data-editor-host]");
     if (host) {
       host.replaceChildren(createRichTextInput({

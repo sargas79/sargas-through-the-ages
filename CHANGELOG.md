@@ -2,6 +2,12 @@
 
 All notable changes to Sargas Through the Ages are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Windows no longer flash and re-appear whenever they update. The opening fade used to replay on every re-render: when time advanced, when you moved to another month, on every edit in the configuration window, and whenever another client changed a note or a setting. It now plays only when a window opens. ([#54](https://github.com/sargas79/sargas-through-the-ages/issues/54))
+
 ## [3.4.1] - 2026-10-15
 
 ### Changed

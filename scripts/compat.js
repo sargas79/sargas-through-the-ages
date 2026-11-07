@@ -252,6 +252,27 @@ export function rerenderModuleApps() {
 }
 
 /**
+ * Play a window's entrance animation, once, when it opens.
+ *
+ * Each render replaces a part's whole element, so an animation set on the part
+ * itself would replay on every repaint and the window would fade out and back
+ * in whenever anything changed. The marker class sits on the application
+ * element instead, which survives re-renders, and comes off as soon as the
+ * entrance has played. A window re-opened after closing is a first render too.
+ */
+export function playEntrance(app, options) {
+  const element = app?.element;
+  if (!options?.isFirstRender || !element) return;
+  element.classList.add("tta-entering");
+  const finish = event => {
+    if (event.animationName !== "tta-in") return;
+    element.classList.remove("tta-entering");
+    element.removeEventListener("animationend", finish);
+  };
+  element.addEventListener("animationend", finish);
+}
+
+/**
  * Show a small modal form and resolve with its values, or null if dismissed.
  * @param {{title:string, content:string, okLabel?:string, okIcon?:string}} config
  */
