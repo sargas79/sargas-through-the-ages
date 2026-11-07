@@ -5,7 +5,7 @@
  * rendered for GMs, and the note service re-checks every permission on submit.
  */
 
-import { createRichTextInput, log, t } from "../compat.js";
+import { createRichTextInput, log, playEntrance, t } from "../compat.js";
 import { MODULE_ID, SCOPE, VISIBILITY } from "../constants.js";
 import { formatDate, formatMonth, getCalendar, getParties, getPartyForUser } from "../services/calendar-service.js";
 import { parseKey } from "../services/date-service.js";
@@ -99,6 +99,7 @@ export class NoteEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   _onRender(context, options) {
     super._onRender(context, options);
+    playEntrance(this, options);
     const host = this.element.querySelector("[data-editor-host]");
     if (host) {
       host.replaceChildren(createRichTextInput({

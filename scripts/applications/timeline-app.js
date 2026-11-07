@@ -6,7 +6,7 @@
  * control in this window changes the shared campaign date.
  */
 
-import { confirmDialog, enrichHTML, html, log, promptForm, renderTemplate, t, trustedHTML } from "../compat.js";
+import { confirmDialog, enrichHTML, html, log, playEntrance, promptForm, renderTemplate, t, trustedHTML } from "../compat.js";
 import { MODULE_ID, TIMELINE_MODE, VISIBILITY } from "../constants.js";
 import { ageLength, endYear } from "../services/age-service.js";
 import {
@@ -345,6 +345,7 @@ export class TimelineApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   _onRender(context, options) {
     super._onRender(context, options);
+    playEntrance(this, options);
     this.element.querySelector("[data-filter-select]")?.addEventListener("change", event => {
       this.filter = event.currentTarget.value;
       this.#browse();
