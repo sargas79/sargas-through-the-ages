@@ -2,7 +2,7 @@
 
 All notable changes to Sargas Through the Ages are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.4.3] - 2026-11-15
 
 ### Fixed
 
@@ -257,6 +257,7 @@ Initial release, targeting Foundry VTT v14 build 366.
 - Full English localisation and a versioned, idempotent data-migration framework.
 - Public API at `game.modules.get("through-the-ages").api`.
 
+[3.4.3]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v3.4.3
 [3.4.2]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v3.4.2
 [3.4.1]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v3.4.1
 [3.4.0]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v3.4.0
