@@ -17,6 +17,7 @@ All notable changes to Sargas Through the Ages are documented here. The format f
 
 ### Changed
 
+- A calendar day with notes now shows a note icon in its top-left corner, with the number of notes beside it when there are two or more. It replaces the small round dots, which were easy to mistake for the moon-phase discs and the party marks. The legend shows the same icon.
 - **Open Timeline** brings the timeline forward if it is already open instead of starting it over at the current date with no filter. The event editor does the same for an event or note it already has open.
 
 ## [3.4.2] - 2026-11-07
