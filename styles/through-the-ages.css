@@ -1048,6 +1048,17 @@
 
 .tta .tta-year-current .tta-year-gutter { font-size: 14px; color: var(--tta-accent-200); }
 
+/* A year listed with the browsed Age without being part of it. */
+.tta .tta-year-outside {
+  display: block;
+  font-family: var(--tta-font);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--tta-text) 38%, transparent);
+}
+
 .tta .tta-year-events {
   flex: 1;
   min-width: 0;

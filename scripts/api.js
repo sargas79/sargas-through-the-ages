@@ -93,7 +93,7 @@ export function buildApi() {
   return {
     // Windows
     openCalendar,
-    openTimeline: () => new TimelineApp().render({ force: true }),
+    openTimeline: () => TimelineApp.open(),
     openConfiguration: () => new CalendarConfigApp().render({ force: true }),
 
     // Calendar state

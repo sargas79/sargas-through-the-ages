@@ -522,7 +522,7 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   static onOpenTimeline() {
     if (!canViewTimeline()) return ui.notifications.warn(t("TTA.Errors.TimelineHidden"));
-    new TimelineApp().render({ force: true });
+    TimelineApp.open();
   }
 
   static onAddDayNote() {
@@ -575,7 +575,7 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const note = this.#findNote(target.dataset.uuid);
     if (!note) return ui.notifications.warn(t("TTA.Errors.NoteMissing"));
     if (note.scope !== SCOPE.DAY) return ui.notifications.warn(t("TTA.Errors.PromoteDayOnly"));
-    new EventEditorApp({ sourceNote: note }).render({ force: true });
+    EventEditorApp.open({ sourceNote: note });
   }
 
   static async onOpenJournal(event, target) {

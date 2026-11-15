@@ -23,25 +23,47 @@
 
 import { log, t } from "../compat.js";
 import { FLAGS, MODULE_ID, PARTY_ENTRY_NAME, VISIBILITY } from "../constants.js";
-import { ensureFolder, getAllNotePages, getFolder } from "./journal-service.js";
+import { ensureFolder, getAllNotePages, managedFirst, mergeRecords } from "./journal-service.js";
 import { isGM, ownershipForVisibility } from "./permission-service.js";
 
-/** Every party store entry this client can see, keyed by party id. */
-export function getPartyEntries() {
-  const folder = getFolder();
-  if (!folder || !game.journal) return new Map();
-  const entries = new Map();
-  for (const entry of game.journal.filter(candidate =>
-    candidate.folder?.id === folder.id && candidate.getFlag(MODULE_ID, FLAGS.PARTY_ENTRY))) {
-    entries.set(entry.getFlag(MODULE_ID, FLAGS.PARTY_ENTRY), entry);
+/**
+ * Every store entry of every party this client can see, keyed by party id, the
+ * one in the managed folder first.
+ *
+ * A party is meant to have one. They are looked for by their flag rather than
+ * by where they sit, for the reason given in `private-store-service.js`: an
+ * entry dragged out of the folder, or left behind when the folder was deleted,
+ * used to vanish, and the next save started a second one beside it.
+ * @returns {Map<string, object[]>}
+ */
+function getPartyEntryGroups() {
+  const groups = new Map();
+  if (!game.journal) return groups;
+  const flagged = game.journal.filter(entry => !!entry.getFlag(MODULE_ID, FLAGS.PARTY_ENTRY));
+  for (const entry of managedFirst(flagged)) {
+    const partyId = entry.getFlag(MODULE_ID, FLAGS.PARTY_ENTRY);
+    if (!groups.has(partyId)) groups.set(partyId, []);
+    groups.get(partyId).push(entry);
   }
+  return groups;
+}
+
+/** Every entry holding one party's store. */
+function entriesOf(partyId) {
+  return getPartyEntryGroups().get(partyId) ?? [];
+}
+
+/** The store entry each party is written to, keyed by party id. */
+export function getPartyEntries() {
+  const entries = new Map();
+  for (const [partyId, group] of getPartyEntryGroups()) entries.set(partyId, group[0]);
   return entries;
 }
 
 /** One party's store entry, or null when it does not exist or is not readable here. */
 export function getPartyEntry(partyId) {
   if (!partyId) return null;
-  return getPartyEntries().get(partyId) ?? null;
+  return entriesOf(partyId)[0] ?? null;
 }
 
 function payloadOf(entry) {
@@ -49,13 +71,18 @@ function payloadOf(entry) {
   return { events: Array.isArray(payload.events) ? payload.events : [] };
 }
 
+/** What a party's entries hold between them, as one payload. */
+function mergedPayload(group) {
+  return { events: mergeRecords(group.map(entry => payloadOf(entry).events)) };
+}
+
 /**
  * One party's records, or null when its store cannot be read.
  * @returns {{events:Array}|null}
  */
 export function readParty(partyId) {
-  const entry = getPartyEntry(partyId);
-  return entry ? payloadOf(entry) : null;
+  const group = partyId ? entriesOf(partyId) : [];
+  return group.length ? mergedPayload(group) : null;
 }
 
 /**
@@ -64,7 +91,7 @@ export function readParty(partyId) {
  */
 export function readAllParties() {
   const all = new Map();
-  for (const [partyId, entry] of getPartyEntries()) all.set(partyId, payloadOf(entry));
+  for (const [partyId, group] of getPartyEntryGroups()) all.set(partyId, mergedPayload(group));
   return all;
 }
 
@@ -120,14 +147,42 @@ export async function ensurePartyEntry(party) {
 /**
  * Replace a party's records. GM only.
  *
- * The whole payload is written at once because it is read at once.
+ * The whole payload is written at once because it is read at once. Any other
+ * entry holding this party's store is emptied, since what it held was read
+ * into the payload being written.
  */
 export async function writeParty(party, { events = [] } = {}) {
   if (!isGM()) throw new Error(t("TTA.Errors.GMOnly"));
   const entry = await ensurePartyEntry(party);
   if (!entry) throw new Error(t("TTA.Errors.NoFolder"));
   await entry.setFlag(MODULE_ID, FLAGS.PARTY_DATA, { events });
+  for (const other of entriesOf(party.id)) {
+    if (other.id === entry.id || !payloadOf(other).events.length) continue;
+    await other.setFlag(MODULE_ID, FLAGS.PARTY_DATA, { events: [] });
+  }
   return { events };
+}
+
+/**
+ * Bring every party store that has ended up in several entries back to one.
+ * GM only.
+ *
+ * What a party's entries hold is written into the first and the rest, empty by
+ * then, are deleted. Part of the repair a GM asks for by name.
+ * @returns {number} how many extra entries were removed
+ */
+export async function consolidatePartyStores(parties = []) {
+  if (!isGM()) return 0;
+  let removed = 0;
+  for (const party of parties) {
+    const [keep, ...extras] = entriesOf(party.id);
+    if (!keep || !extras.length) continue;
+    await writeParty(party, readParty(party.id));
+    for (const extra of extras) await extra.delete();
+    removed += extras.length;
+  }
+  if (removed) log("warn", `${removed} duplicate party stores were merged into their party's entry`);
+  return removed;
 }
 
 /**
@@ -145,15 +200,21 @@ export async function syncPartyEntry(party) {
 
   const pagesChanged = await syncPartyNotePages(party);
 
-  const changes = {};
+  // Every entry holding this party's store, not only the one written to: a
+  // stray copy that kept its old ownership would go on being delivered to a
+  // player who has since left the party.
   const wanted = partyOwnership(party);
-  if (!sameOwnership(entry.ownership ?? {}, wanted)) changes.ownership = wanted;
-  if (entry.name !== entryName(party)) changes.name = entryName(party);
-  if (!Object.keys(changes).length) return pagesChanged > 0;
-
-  await entry.update(changes);
-  log("debug", `Updated the store for party ${party.name}`, changes);
-  return true;
+  let entriesChanged = 0;
+  for (const held of entriesOf(party.id)) {
+    const changes = {};
+    if (!sameOwnership(held.ownership ?? {}, wanted)) changes.ownership = wanted;
+    if (held.name !== entryName(party)) changes.name = entryName(party);
+    if (!Object.keys(changes).length) continue;
+    await held.update(changes);
+    log("debug", `Updated the store for party ${party.name}`, changes);
+    entriesChanged += 1;
+  }
+  return entriesChanged > 0 || pagesChanged > 0;
 }
 
 /**
@@ -201,9 +262,9 @@ export async function syncPartyEntries(parties = []) {
  */
 export async function deletePartyEntry(partyId) {
   if (!isGM()) return false;
-  const entry = getPartyEntry(partyId);
-  if (!entry) return false;
-  await entry.delete();
+  const group = partyId ? entriesOf(partyId) : [];
+  if (!group.length) return false;
+  for (const entry of group) await entry.delete();
   log("info", `Deleted the store for party ${partyId}`);
   return true;
 }
@@ -219,12 +280,12 @@ export async function repairPartyOwnership(parties = []) {
   if (!isGM()) return 0;
   let repaired = 0;
   for (const party of parties) {
-    const entry = getPartyEntry(party.id);
-    if (!entry) continue;
     const wanted = partyOwnership(party);
-    if (sameOwnership(entry.ownership ?? {}, wanted)) continue;
-    await entry.update({ ownership: wanted });
-    repaired += 1;
+    for (const entry of entriesOf(party.id)) {
+      if (sameOwnership(entry.ownership ?? {}, wanted)) continue;
+      await entry.update({ ownership: wanted });
+      repaired += 1;
+    }
   }
   if (repaired) log("warn", `${repaired} party stores had been shared; their ownership was reset`);
   return repaired;

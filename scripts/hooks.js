@@ -4,9 +4,9 @@
  */
 
 import { log, rerenderModuleApps, t } from "./compat.js";
-import { FLAGS, MODULE_ID } from "./constants.js";
 import { CalendarApp } from "./applications/calendar-app.js";
 import { onWorldTimeUpdated } from "./services/calendar-service.js";
+import { isCalendarDocument } from "./services/journal-service.js";
 
 /**
  * Open the calendar window, or focus it if it is already up.
@@ -58,13 +58,6 @@ function onRenderJournalDirectory(app, element) {
   const header = root.querySelector(".directory-header, header");
   if (header) return header.after(button);
   root.prepend(button);
-}
-
-/** True when a document belongs to the module's calendar note storage. */
-function isCalendarDocument(document) {
-  if (document?.documentName === "JournalEntry") return !!document.getFlag(MODULE_ID, FLAGS.ENTRY);
-  if (document?.documentName === "JournalEntryPage") return !!document.getFlag(MODULE_ID, FLAGS.NOTE);
-  return false;
 }
 
 function onDocumentChanged(document) {

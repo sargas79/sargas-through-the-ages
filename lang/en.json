@@ -214,6 +214,8 @@
       "OpenSource": "Open source note",
       "Origin": "From player note",
       "OriginTooltip": "Created from a calendar note. Visible to GMs only.",
+      "OutsideAge": "No Age",
+      "OutsideAgeHint": "This year is not part of any Age. It is listed with the nearest one so that it can be reached.",
       "Previous": "Previous",
       "SourceUnavailable": "Source note no longer available",
       "Title": "Timeline"

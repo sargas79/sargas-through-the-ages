@@ -52,6 +52,38 @@ export async function ensureFolder() {
   return folder;
 }
 
+/**
+ * Entries ordered with those in the managed folder first, otherwise as given.
+ *
+ * The store entries are found by their flag wherever they sit, because a
+ * journal entry can be dragged out of the folder, or left behind when the
+ * folder is deleted and made again. Should a second one exist by then, the one
+ * that is where it belongs is the one that gets written to.
+ */
+export function managedFirst(entries) {
+  const folderId = getFolder()?.id ?? null;
+  const rank = entry => (folderId && entry.folder?.id === folderId ? 0 : 1);
+  return [...entries].sort((a, b) => rank(a) - rank(b));
+}
+
+/**
+ * Several lists of records as one, keeping the first record seen for each id.
+ * Used to read stores that have ended up in more than one entry.
+ */
+export function mergeRecords(lists) {
+  const seen = new Set();
+  const merged = [];
+  for (const record of lists.flat()) {
+    const id = record?.id ?? null;
+    if (id !== null) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+    }
+    merged.push(record);
+  }
+  return merged;
+}
+
 /** All journal entries managed by the module, regardless of date. */
 export function getManagedEntries() {
   const folder = getFolder();
@@ -90,6 +122,26 @@ export async function ensureEntryForKey(dateKey) {
 export function readNoteFlags(page) {
   const raw = page?.getFlag?.(MODULE_ID, FLAGS.NOTE);
   return raw ? migrateNoteFlags(raw) : null;
+}
+
+/**
+ * True when a document holds something the module's windows draw: a date entry,
+ * a note page, or one of the two kinds of store entry.
+ *
+ * The stores are the part that is easy to leave out. A GM-only event is written
+ * to the GM-only entry's flags and a party's event to that party's entry, and
+ * nothing else changes: the world setting that holds the shared events is
+ * rewritten with the list it already had, which Foundry drops as an empty
+ * update without calling the setting's `onChange`. The entry's own update is
+ * then the only signal a client gets that the timeline has changed.
+ */
+export function isCalendarDocument(document) {
+  if (document?.documentName === "JournalEntry") {
+    return [FLAGS.ENTRY, FLAGS.PRIVATE_ENTRY, FLAGS.PARTY_ENTRY]
+      .some(flag => !!document.getFlag(MODULE_ID, flag));
+  }
+  if (document?.documentName === "JournalEntryPage") return !!document.getFlag(MODULE_ID, FLAGS.NOTE);
+  return false;
 }
 
 /** Every note page in the managed folder, as `{ page, flags, entry }` records. */
@@ -217,6 +269,26 @@ export async function linkNoteToEvent(pageUuid, eventId) {
 }
 
 /**
+ * Forget the timeline event a note was promoted into, once that event is gone.
+ * GM only.
+ *
+ * Only a link to the named event is cleared: a note promoted again since
+ * points at its new event, and that link is not this one's to remove.
+ */
+export async function unlinkNoteFromEvent(pageUuid, eventId) {
+  const page = await fromUuid(pageUuid);
+  if (!page) return null;
+  const flags = readNoteFlags(page);
+  if (!flags || flags.timelineEventId !== eventId) return null;
+  await page.setFlag(MODULE_ID, FLAGS.NOTE, {
+    ...flags,
+    timelineEventId: null,
+    updatedAt: new Date().toISOString()
+  });
+  return page;
+}
+
+/**
  * Delete a note page. GM only.
  *
  * The parent date entry is intentionally left in place even when it becomes
@@ -251,6 +323,10 @@ export function getDateUsage() {
 /**
  * Administrative repair: re-create or re-link the managed folder and re-home
  * any managed entry that has drifted out of it. GM only.
+ *
+ * The GM-only store and the party stores are brought back along with the date
+ * entries. They are read wherever they are, so nothing is lost while one is
+ * astray, but the folder is where a GM expects to find them.
  */
 export async function repairFolder() {
   if (!isGM()) return null;
@@ -258,7 +334,7 @@ export async function repairFolder() {
   if (!folder) return null;
 
   const strays = game.journal.filter(entry =>
-    entry.folder?.id !== folder.id && entry.getFlag(MODULE_ID, FLAGS.ENTRY)
+    entry.folder?.id !== folder.id && isCalendarDocument(entry)
   );
   if (strays.length) {
     await JournalEntry.updateDocuments(strays.map(entry => ({ _id: entry.id, folder: folder.id })));

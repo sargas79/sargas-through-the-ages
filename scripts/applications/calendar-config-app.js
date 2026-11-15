@@ -898,6 +898,10 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
       ui.notifications.warn(t("TTA.Errors.GMOnly"));
       return;
     }
+    // A store that went astray may have had a second one started in its place;
+    // both are back in the folder now, so they are made one again.
+    await privateStore.consolidatePrivateStore();
+    await partyStore.consolidatePartyStores(getData().parties);
     // The GM-only store is an ordinary-looking journal entry in the sidebar, so
     // its permissions can be changed there by accident. Repair resets them.
     await privateStore.repairPrivateOwnership();
