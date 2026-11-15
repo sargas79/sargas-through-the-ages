@@ -29,7 +29,7 @@
 
 import { log, t } from "../compat.js";
 import { FLAGS, MODULE_ID, PRIVATE_ENTRY_NAME } from "../constants.js";
-import { ensureFolder, managedFirst, mergeRecords } from "./journal-service.js";
+import { ensureFolder, managedFirst, mergeRecords, retireStoreEntry } from "./journal-service.js";
 import { isGM } from "./permission-service.js";
 
 /**
@@ -137,17 +137,18 @@ export async function writePrivate({ ages = [], events = [] } = {}) {
 /**
  * Bring a store that has ended up in several entries back to one. GM only.
  *
- * Everything the entries hold is written into the first and the rest, empty by
- * then, are deleted. Part of the repair a GM asks for by name; nothing else
- * deletes an entry.
- * @returns {number} how many extra entries were removed
+ * Everything the entries hold is written into the first, and the rest stop
+ * being stores: deleted when empty, kept as ordinary entries when a GM has
+ * written pages into them (see `retireStoreEntry`). Part of the repair a GM
+ * asks for by name; nothing else removes an entry.
+ * @returns {number} how many extra entries stopped being stores
  */
 export async function consolidatePrivateStore() {
   if (!isGM()) return 0;
   const [keep, ...extras] = getPrivateEntries();
   if (!keep || !extras.length) return 0;
   await writePrivate(readPrivate());
-  for (const extra of extras) await extra.delete();
+  for (const extra of extras) await retireStoreEntry(extra, [FLAGS.PRIVATE_ENTRY, FLAGS.PRIVATE_DATA]);
   log("warn", `The GM-only calendar store was in ${extras.length + 1} entries; they were merged into one`);
   return extras.length;
 }

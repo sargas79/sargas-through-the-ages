@@ -23,7 +23,7 @@
 
 import { log, t } from "../compat.js";
 import { FLAGS, MODULE_ID, PARTY_ENTRY_NAME, VISIBILITY } from "../constants.js";
-import { ensureFolder, getAllNotePages, managedFirst, mergeRecords } from "./journal-service.js";
+import { ensureFolder, getAllNotePages, managedFirst, mergeRecords, retireStoreEntry } from "./journal-service.js";
 import { isGM, ownershipForVisibility } from "./permission-service.js";
 
 /**
@@ -167,9 +167,11 @@ export async function writeParty(party, { events = [] } = {}) {
  * Bring every party store that has ended up in several entries back to one.
  * GM only.
  *
- * What a party's entries hold is written into the first and the rest, empty by
- * then, are deleted. Part of the repair a GM asks for by name.
- * @returns {number} how many extra entries were removed
+ * What a party's entries hold is written into the first, and the rest stop
+ * being stores: deleted when empty, kept as ordinary entries when a GM has
+ * written pages into them (see `retireStoreEntry`). Part of the repair a GM
+ * asks for by name.
+ * @returns {number} how many extra entries stopped being stores
  */
 export async function consolidatePartyStores(parties = []) {
   if (!isGM()) return 0;
@@ -178,7 +180,7 @@ export async function consolidatePartyStores(parties = []) {
     const [keep, ...extras] = entriesOf(party.id);
     if (!keep || !extras.length) continue;
     await writeParty(party, readParty(party.id));
-    for (const extra of extras) await extra.delete();
+    for (const extra of extras) await retireStoreEntry(extra, [FLAGS.PARTY_ENTRY, FLAGS.PARTY_DATA]);
     removed += extras.length;
   }
   if (removed) log("warn", `${removed} duplicate party stores were merged into their party's entry`);
@@ -262,9 +264,12 @@ export async function syncPartyEntries(parties = []) {
  */
 export async function deletePartyEntry(partyId) {
   if (!isGM()) return false;
-  const group = partyId ? entriesOf(partyId) : [];
-  if (!group.length) return false;
-  for (const entry of group) await entry.delete();
+  const [entry, ...extras] = partyId ? entriesOf(partyId) : [];
+  if (!entry) return false;
+  await entry.delete();
+  // A stray copy is retired the way the repair retires one, so pages a GM
+  // wrote into it are not deleted along with the party.
+  for (const extra of extras) await retireStoreEntry(extra, [FLAGS.PARTY_ENTRY, FLAGS.PARTY_DATA]);
   log("info", `Deleted the store for party ${partyId}`);
   return true;
 }

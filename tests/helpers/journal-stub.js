@@ -78,6 +78,11 @@ class StubEntry {
     return this;
   }
 
+  async unsetFlag(scope, key) {
+    if (this.flags[scope]) delete this.flags[scope][key];
+    return this;
+  }
+
   async update(changes) {
     if (changes.ownership) this.ownership = changes.ownership;
     if (changes.folder) this.folder = { id: changes.folder };

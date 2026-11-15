@@ -132,6 +132,24 @@ describe("a store that is not in the notes folder", () => {
     assert.deepEqual(titles(timeline.getEvents()), ["The older secret", "The traitor"]);
   });
 
+  it("keeps a second store a GM has written pages into, as an ordinary entry", async () => {
+    harness = installJournalWorld({ isGM: true });
+    const { calendar, timeline, privateStore } = await loadServices();
+    await calendar.saveData(structuredClone(DEFAULT_CALENDAR_DATA));
+    const event = await timeline.createEvent({ dateKey: "0001-01-07", title: "The traitor", visibility: VISIBILITY.GM_ONLY });
+    const stray = await secondPrivateStore(event, { folder: "folder1", title: "The older secret" });
+    await stray.createEmbeddedDocuments("JournalEntryPage", [{ name: "Session prep" }]);
+
+    assert.equal(await privateStore.consolidatePrivateStore(), 1);
+
+    assert.ok(harness.allEntries().includes(stray), "the entry with pages is not deleted");
+    assert.equal(stray.allPages.length, 1);
+    assert.equal(stray.getFlag(MODULE_ID, FLAGS.PRIVATE_ENTRY), undefined);
+    assert.equal(stray.getFlag(MODULE_ID, FLAGS.PRIVATE_DATA), undefined);
+    assert.equal(flagged(FLAGS.PRIVATE_ENTRY).length, 1);
+    assert.deepEqual(titles(timeline.getEvents()), ["The older secret", "The traitor"]);
+  });
+
   it("leaves a single store alone when there is nothing to make one", async () => {
     harness = installJournalWorld({ isGM: true });
     const { calendar, timeline, privateStore } = await loadServices();
@@ -202,6 +220,22 @@ describe("a party's store that is not in the notes folder", () => {
     assert.equal(stores.length, 1);
     assert.equal(stores[0].folder?.id, "folder1");
     assert.deepEqual(titles(timeline.getEvents()), ["North found the key", "North's older find"]);
+  });
+
+  it("keeps a stray copy that holds pages when its party is deleted", async () => {
+    const { partyStore } = await worldWithPartyEvent();
+    const stray = await JournalEntry.create({
+      name: "Calendar (party: North)",
+      folder: null,
+      flags: { [MODULE_ID]: { [FLAGS.PARTY_ENTRY]: "a", [FLAGS.PARTY_DATA]: { events: [] } } }
+    });
+    await stray.createEmbeddedDocuments("JournalEntryPage", [{ name: "North's handouts" }]);
+
+    assert.equal(await partyStore.deletePartyEntry("a"), true);
+
+    assert.equal(flagged(FLAGS.PARTY_ENTRY).length, 0);
+    assert.ok(harness.allEntries().includes(stray));
+    assert.equal(stray.allPages.length, 1);
   });
 
   it("is deleted with its party wherever it is", async () => {

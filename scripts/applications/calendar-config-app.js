@@ -900,8 +900,9 @@ export class CalendarConfigApp extends HandlebarsApplicationMixin(ApplicationV2)
     }
     // A store that went astray may have had a second one started in its place;
     // both are back in the folder now, so they are made one again.
-    await privateStore.consolidatePrivateStore();
-    await partyStore.consolidatePartyStores(getData().parties);
+    const merged = await privateStore.consolidatePrivateStore()
+      + await partyStore.consolidatePartyStores(getData().parties);
+    if (merged) ui.notifications.info(t("TTA.Notifications.StoresMerged", { count: merged }));
     // The GM-only store is an ordinary-looking journal entry in the sidebar, so
     // its permissions can be changed there by accident. Repair resets them.
     await privateStore.repairPrivateOwnership();

@@ -84,6 +84,28 @@ export function mergeRecords(lists) {
   return merged;
 }
 
+/**
+ * Stop using an entry as a store once what it held has been copied into the
+ * store's main entry. GM only.
+ *
+ * A store entry looks like any other journal entry in the sidebar, so a GM may
+ * have written pages into it. An entry with no pages is deleted; one with
+ * pages is kept as an ordinary journal entry, with the store's flags removed
+ * and its ownership as it was, so nothing the GM wrote is lost.
+ * @param {string[]} flags the module flags that make it a store
+ * @returns {Promise<boolean>} whether the entry was deleted
+ */
+export async function retireStoreEntry(entry, flags) {
+  const pages = entry.pages?.size ?? entry.pages?.length ?? 0;
+  if (!pages) {
+    await entry.delete();
+    return true;
+  }
+  for (const flag of flags) await entry.unsetFlag(MODULE_ID, flag);
+  log("info", `Kept "${entry.name}" as an ordinary journal entry, since it has pages of its own`);
+  return false;
+}
+
 /** All journal entries managed by the module, regardless of date. */
 export function getManagedEntries() {
   const folder = getFolder();

@@ -439,6 +439,7 @@
       "EventDeleted": "Timeline event deleted.",
       "EventUpdated": "Timeline event updated.",
       "FolderRepaired": "Calendar notes folder checked. {count} entries were re-homed.",
+      "StoresMerged": "{count} duplicate calendar stores were merged into one. Any with pages of their own were kept as ordinary journal entries.",
       "NoteCreated": "Note created.",
       "NoteDeleted": "Note deleted.",
       "NotePromoted": "Timeline event created from the note. The original note is unchanged.",
