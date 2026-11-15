@@ -13,7 +13,7 @@
  * then filters again on top.
  */
 
-import { log, rerenderModuleApps, sanitizeHTML, t } from "../compat.js";
+import { log, sanitizeHTML, t } from "../compat.js";
 import {
   DEFAULT_COLOR,
   EVENT_SOURCE,
@@ -22,10 +22,10 @@ import {
   TIMELINE_MODE,
   VISIBILITY
 } from "../constants.js";
-import { containsYear, endYear } from "./age-service.js";
+import { containsYear, endYear, findListingAge } from "./age-service.js";
 import { getAgeForYear, getCalendar, getParties, getParty } from "./calendar-service.js";
 import { compareDateKeys, parseKey } from "./date-service.js";
-import { linkNoteToEvent, updateNotePage } from "./journal-service.js";
+import { linkNoteToEvent, unlinkNoteFromEvent, updateNotePage } from "./journal-service.js";
 import { migrateEvents } from "./migration-service.js";
 import { isMember, partyForUser } from "./party-service.js";
 import { readAllParties, writeParty } from "./party-store-service.js";
@@ -201,9 +201,22 @@ export async function deleteEvent(eventId) {
     return false;
   }
   const events = getEvents();
-  const remaining = events.filter(event => event.id !== eventId);
-  if (remaining.length === events.length) return false;
-  await writeEvents(remaining);
+  const removed = events.find(event => event.id === eventId);
+  if (!removed) return false;
+  await writeEvents(events.filter(event => event.id !== eventId));
+
+  // The note it was promoted from still says it is on the timeline. Left that
+  // way it could never be promoted again, so the link goes with the event. The
+  // event is already gone by now, and a note that cannot be reached does not
+  // make its deletion a failure.
+  const noteUuid = removed.source?.noteUuid;
+  if (noteUuid) {
+    try {
+      await unlinkNoteFromEvent(noteUuid, eventId);
+    } catch (error) {
+      log("warn", "Could not clear the timeline link on a deleted event's note", error);
+    }
+  }
   return true;
 }
 
@@ -242,9 +255,20 @@ export async function promoteNote(noteView, { dateKey, title, description, visib
   return event;
 }
 
-/** Whether a note view was written by a player rather than a GM. */
+/**
+ * Whether a note is a player's own record, which promotion puts on the
+ * players' timeline whatever the GM picks.
+ *
+ * That rule takes the choice of visibility away from the GM, so it applies
+ * only where it is certain. A GM-only note is never one: no player can make a
+ * note GM-only, so it is a GM's whoever the author is recorded as, including a
+ * GM since demoted. Nor is a note whose author no longer exists, which may as
+ * easily have been a GM's. In both cases the GM chooses, and the default they
+ * are offered is GM-only.
+ */
 export function isPlayerNote(noteView) {
-  return !!noteView && !noteView.isGMNote;
+  if (!noteView || noteView.isGMNote) return false;
+  return noteView.visibility !== VISIBILITY.GM_ONLY && noteView.authorKnown !== false;
 }
 
 /** The id of the party a note's author belongs to, or null. */
@@ -315,6 +339,24 @@ export function getEventsForAge(age, user = game.user) {
 }
 
 /**
+ * The events listed when an Age is browsed, visible to the user: those inside
+ * its range, and those in the uncovered years that are listed with it.
+ *
+ * `getEventsForAge` on its own left an event dated between two Ages, or before
+ * the first, out of every Age's list, so it could not be reached by stepping
+ * through them. `ages` is the set being stepped through — the Ages this user
+ * can see, so a player's event in a year only a hidden Age covers is listed
+ * with a neighbour they can browse.
+ */
+export function getEventsListedWithAge(age, ages = [], user = game.user) {
+  if (!age) return [];
+  return getVisibleEvents(user).filter(event => {
+    const parsed = parseKey(event.dateKey);
+    return parsed && findListingAge(ages, parsed.year)?.id === age.id;
+  });
+}
+
+/**
  * Per-day event counts for a month, used for the calendar grid indicators.
  * @returns {Record<number, number>}
  */
@@ -348,6 +390,77 @@ export function groupEventsByYear(events, years, currentYear) {
     }));
 }
 
+/** Years between regular ticks on an Age's spine while the Age is short enough. */
+const TICK_INTERVAL = 5;
+
+/** The most regular ticks an Age's spine draws, however long the Age. */
+const TICK_BUDGET = 40;
+
+/** About how many of those regular ticks carry their year. */
+const LABEL_BUDGET = 10;
+
+/**
+ * The smallest round number — 1, 2 or 5 times a power of ten — that divides
+ * `span` into at most `budget` parts.
+ */
+export function roundStep(span, budget) {
+  const wanted = Number(span) / Math.max(1, Number(budget));
+  if (!Number.isFinite(wanted) || wanted <= 1) return 1;
+  for (let scale = 1; ; scale *= 10) {
+    for (const base of [1, 2, 5]) {
+      if (base * scale >= wanted) return base * scale;
+    }
+  }
+}
+
+/**
+ * The ticks along an Age's spine.
+ *
+ * A tick is drawn for the current year, for each year carrying an event, and
+ * otherwise at a regular step, so a long Age stays legible; the number of
+ * regular ticks is bounded however long the Age is.
+ *
+ * Regular ticks stand on multiples of the step, not at the step counted from
+ * the Age's first year, and every few of them is labelled. Counted from the
+ * first year they fell on 1, 6, 11 for an Age starting in year 1, and the
+ * label rule — years divisible by twenty — then matched none of them, which
+ * left such a spine without a single year on it.
+ *
+ * @param {object} span
+ * @param {number} span.startYear    the Age's first year
+ * @param {number} span.endYear      the Age's last year
+ * @param {Iterable<number>} [span.eventYears] years carrying a listed event
+ * @param {number|null} [span.currentYear]     the campaign's current year
+ * @returns {Array<{year:number, position:string, label:number|string, hasEvent:boolean, isCurrent:boolean}>}
+ */
+export function buildAgeTicks({ startYear, endYear: lastYear, eventYears = [], currentYear = null }) {
+  const start = Number(startYear);
+  const last = Number(lastYear);
+  if (!Number.isInteger(start) || !Number.isInteger(last) || last < start) return [];
+  const span = last - start + 1;
+  const inSpan = year => Number.isInteger(year) && year >= start && year <= last;
+
+  const step = Math.max(TICK_INTERVAL, roundStep(span, TICK_BUDGET));
+  const labelStep = step * roundStep(span / step, LABEL_BUDGET);
+
+  const withEvent = new Set([...eventYears].filter(inSpan));
+  const marked = new Set(withEvent);
+  for (let year = Math.ceil(start / step) * step; year <= last; year += step) marked.add(year);
+  if (inSpan(currentYear)) marked.add(currentYear);
+
+  return [...marked].sort((a, b) => a - b).map(year => {
+    const hasEvent = withEvent.has(year);
+    const isCurrent = year === currentYear;
+    return {
+      year,
+      position: (((year - start + 0.5) / span) * 100).toFixed(3),
+      label: (isCurrent || hasEvent || year % labelStep === 0) ? year : "",
+      hasEvent,
+      isCurrent
+    };
+  });
+}
+
 /** Highest month and day numbers referenced by stored events. */
 export function getDateUsage() {
   let maxMonth = 0;
@@ -376,14 +489,4 @@ export function countEventsInAgeRange(age) {
 export function getAgeForEvent(event) {
   const parsed = parseKey(event?.dateKey);
   return parsed ? getAgeForYear(parsed.year) : null;
-}
-
-/** Setting change handler: keep open timeline windows current. */
-export function onEventsChanged() {
-  rerenderModuleApps();
-}
-
-/** Whether the current user may act on timeline management controls. */
-export function canManage() {
-  return isGM();
 }

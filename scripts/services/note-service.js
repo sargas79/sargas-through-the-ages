@@ -25,6 +25,7 @@ import {
   isGM
 } from "./permission-service.js";
 import { registerHandler, request } from "./relay-service.js";
+import { getEvents } from "./timeline-service.js";
 import { validateNote } from "./validation-service.js";
 
 /** Default visibility for a note authored by the given user. */
@@ -43,11 +44,30 @@ function membersOf(partyId) {
   return getParty(partyId)?.members ?? [];
 }
 
-/** Shape a note page into the plain record the templates consume. */
-function toView(record, user = game.user) {
+/**
+ * The ids of the events a GM's client holds, or null for anyone else.
+ *
+ * A note records the event it was promoted into, and that record can outlive
+ * the event: an import replaces the whole event list, and deleting an event
+ * used to leave the link behind. A GM receives every
+ * event, so for them a link to an id that is not there is a link to nothing.
+ * A player receives only the events they may see, so for them a missing id
+ * proves nothing and the note's own word is taken.
+ */
+function knownEventIds(user = game.user) {
+  if (!isGM() || !isGM(user)) return null;
+  return new Set(getEvents().map(event => event.id));
+}
+
+/**
+ * Shape a note page into the plain record the templates consume.
+ * @param {Set<string>|null} eventIds see `knownEventIds`
+ */
+function toView(record, user = game.user, eventIds = null) {
   const { page, flags } = record;
   const parsed = parseKey(flags.dateKey);
   const party = flags.visibility === VISIBILITY.PARTY ? getParty(flags.partyId) : null;
+  const author = game.users.get(flags.authorId) ?? null;
   return {
     uuid: page.uuid,
     id: page.id,
@@ -58,16 +78,20 @@ function toView(record, user = game.user) {
     month: parsed?.month ?? null,
     day: parsed?.day ?? null,
     authorId: flags.authorId,
-    authorName: flags.authorName || game.users.get(flags.authorId)?.name || t("TTA.Notes.UnknownAuthor"),
+    authorName: flags.authorName || author?.name || t("TTA.Notes.UnknownAuthor"),
+    authorKnown: !!author,
     isOwnNote: flags.authorId === user.id,
-    isGMNote: !!game.users.get(flags.authorId)?.isGM,
+    // Whose note it is, by its author while that user exists. Once the account
+    // is gone the note's visibility is what is left to go on, and GM-only is a
+    // visibility no player can give a note.
+    isGMNote: author ? !!author.isGM : flags.visibility === VISIBILITY.GM_ONLY,
     visibility: flags.visibility,
     partyId: flags.partyId ?? null,
     partyName: party?.name ?? null,
     visibilityLabel: party
       ? t("TTA.Notes.VisibilityParty", { name: party.name })
       : t(`TTA.Visibility.${flags.visibility}`),
-    promoted: !!flags.timelineEventId,
+    promoted: !!flags.timelineEventId && (!eventIds || eventIds.has(flags.timelineEventId)),
     timelineEventId: flags.timelineEventId,
     createdAt: flags.createdAt,
     updatedAt: flags.updatedAt,
@@ -79,16 +103,18 @@ function toView(record, user = game.user) {
 
 /** Every note the user may see, newest date last. */
 export function getVisibleNotes(user = game.user) {
+  const eventIds = knownEventIds(user);
   return journal.getAllNotePages()
     .filter(record => canSee(record.flags, user))
-    .map(record => toView(record, user));
+    .map(record => toView(record, user, eventIds));
 }
 
 /** Notes on one exact date key that the user may see. */
 export function getNotesForKey(dateKey, user = game.user) {
+  const eventIds = knownEventIds(user);
   return journal.getNotePagesForKey(dateKey)
     .filter(record => canSee(record.flags, user))
-    .map(record => toView(record, user))
+    .map(record => toView(record, user, eventIds))
     .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
 }
 

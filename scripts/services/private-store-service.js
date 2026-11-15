@@ -29,16 +29,28 @@
 
 import { log, t } from "../compat.js";
 import { FLAGS, MODULE_ID, PRIVATE_ENTRY_NAME } from "../constants.js";
-import { ensureFolder, getFolder } from "./journal-service.js";
+import { ensureFolder, managedFirst, mergeRecords, retireStoreEntry } from "./journal-service.js";
 import { isGM } from "./permission-service.js";
 
-/** The GM-only entry, or null when it does not exist or is not readable here. */
+/**
+ * Every GM-only entry this client can read, the one in the managed folder first.
+ *
+ * There is meant to be one. It is looked for by its flag rather than by where
+ * it sits, because it is an ordinary journal entry in the sidebar: it can be
+ * dragged out of the folder, and it is left outside when the folder is deleted
+ * and made again. Looking only inside the folder made the store vanish in
+ * either case, hidden Ages and GM-only events with it, and the next save then
+ * started a second, empty one. A world that has been through that has two, so
+ * every entry carrying the flag is read.
+ */
+export function getPrivateEntries() {
+  if (!game.journal) return [];
+  return managedFirst(game.journal.filter(entry => !!entry.getFlag(MODULE_ID, FLAGS.PRIVATE_ENTRY)));
+}
+
+/** The GM-only entry that is written to, or null when none is readable here. */
 export function getPrivateEntry() {
-  const folder = getFolder();
-  if (!folder || !game.journal) return null;
-  return game.journal.find(entry =>
-    entry.folder?.id === folder.id && entry.getFlag(MODULE_ID, FLAGS.PRIVATE_ENTRY)
-  ) ?? null;
+  return getPrivateEntries()[0] ?? null;
 }
 
 /** True when the GM-only store exists and this client may read it. */
@@ -46,17 +58,27 @@ export function isPrivateStoreReadable() {
   return !!getPrivateEntry();
 }
 
-/**
- * The hidden records, or null when the store cannot be read.
- * @returns {{ages:Array, events:Array}|null}
- */
-export function readPrivate() {
-  const entry = getPrivateEntry();
-  if (!entry) return null;
+function payloadOf(entry) {
   const payload = entry.getFlag(MODULE_ID, FLAGS.PRIVATE_DATA) ?? {};
   return {
     ages: Array.isArray(payload.ages) ? payload.ages : [],
     events: Array.isArray(payload.events) ? payload.events : []
+  };
+}
+
+/**
+ * The hidden records, or null when the store cannot be read.
+ *
+ * Should the store be in more than one entry, the records of all of them are
+ * returned as one list.
+ * @returns {{ages:Array, events:Array}|null}
+ */
+export function readPrivate() {
+  const payloads = getPrivateEntries().map(payloadOf);
+  if (!payloads.length) return null;
+  return {
+    ages: mergeRecords(payloads.map(payload => payload.ages)),
+    events: mergeRecords(payloads.map(payload => payload.events))
   };
 }
 
@@ -92,13 +114,43 @@ export async function ensurePrivateEntry() {
  *
  * The whole payload is written at once because it is read at once: there is no
  * partial state worth the extra round trip.
+ *
+ * The payload a caller writes was assembled from every entry `readPrivate`
+ * could see, so once it is in the first one the others are emptied. Left as
+ * they were, a record deleted here would come straight back from its copy.
  */
 export async function writePrivate({ ages = [], events = [] } = {}) {
   if (!isGM()) throw new Error(t("TTA.Errors.GMOnly"));
   const entry = await ensurePrivateEntry();
   if (!entry) throw new Error(t("TTA.Errors.NoFolder"));
   await entry.setFlag(MODULE_ID, FLAGS.PRIVATE_DATA, { ages, events });
+  for (const other of getPrivateEntries()) {
+    if (other.id === entry.id) continue;
+    const held = payloadOf(other);
+    if (held.ages.length || held.events.length) {
+      await other.setFlag(MODULE_ID, FLAGS.PRIVATE_DATA, { ages: [], events: [] });
+    }
+  }
   return { ages, events };
+}
+
+/**
+ * Bring a store that has ended up in several entries back to one. GM only.
+ *
+ * Everything the entries hold is written into the first, and the rest stop
+ * being stores: deleted when empty, kept as ordinary entries when a GM has
+ * written pages into them (see `retireStoreEntry`). Part of the repair a GM
+ * asks for by name; nothing else removes an entry.
+ * @returns {number} how many extra entries stopped being stores
+ */
+export async function consolidatePrivateStore() {
+  if (!isGM()) return 0;
+  const [keep, ...extras] = getPrivateEntries();
+  if (!keep || !extras.length) return 0;
+  await writePrivate(readPrivate());
+  for (const extra of extras) await retireStoreEntry(extra, [FLAGS.PRIVATE_ENTRY, FLAGS.PRIVATE_DATA]);
+  log("warn", `The GM-only calendar store was in ${extras.length + 1} entries; they were merged into one`);
+  return extras.length;
 }
 
 /**
@@ -109,15 +161,16 @@ export async function writePrivate({ ages = [], events = [] } = {}) {
  * rather than trusting that nobody has.
  */
 export async function repairPrivateOwnership() {
-  const entry = getPrivateEntry();
-  if (!entry || !isGM()) return false;
-  const ownership = entry.ownership ?? {};
-  const shared = Object.entries(ownership)
-    .some(([id, level]) => level > CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE
-      && (id === "default" || !game.users.get(id)?.isGM));
-  if (!shared) return false;
-
-  await entry.update({ ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE } });
-  log("warn", "The GM-only calendar store had been shared; its ownership was reset");
-  return true;
+  if (!isGM()) return false;
+  let repaired = false;
+  for (const entry of getPrivateEntries()) {
+    const shared = Object.entries(entry.ownership ?? {})
+      .some(([id, level]) => level > CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE
+        && (id === "default" || !game.users.get(id)?.isGM));
+    if (!shared) continue;
+    await entry.update({ ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE } });
+    repaired = true;
+  }
+  if (repaired) log("warn", "The GM-only calendar store had been shared; its ownership was reset");
+  return repaired;
 }

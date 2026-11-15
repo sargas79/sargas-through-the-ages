@@ -8,7 +8,7 @@
 
 import { confirmDialog, enrichHTML, html, log, playEntrance, promptForm, renderTemplate, t, trustedHTML } from "../compat.js";
 import { MODULE_ID, TIMELINE_MODE, VISIBILITY } from "../constants.js";
-import { ageLength, endYear } from "../services/age-service.js";
+import { ageLength, containsYear, endYear, findListingAge } from "../services/age-service.js";
 import {
   formatDate,
   formatMonth,
@@ -24,10 +24,11 @@ import { addMonths, addYears, daysInMonth, parseKey } from "../services/date-ser
 import { getPromotableNotes } from "../services/note-service.js";
 import { canManageEvents, canViewTimeline, isGM } from "../services/permission-service.js";
 import {
+  buildAgeTicks,
   deleteEvent,
-  getEventsForAge,
   getEventsForMonth,
   getEventsForYear,
+  getEventsListedWithAge,
   getEvent,
   getMode,
   groupEventsByYear,
@@ -37,19 +38,36 @@ import { EventEditorApp } from "./event-editor-app.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
-/** Years between regular ticks on the spine while the span is short enough. */
-const TICK_INTERVAL = 5;
-
-/** The most regular ticks the spine draws, whatever the span. */
-const TICK_BUDGET = 40;
+/** The one id the timeline window is ever rendered under. */
+const TIMELINE_ID = "tta-timeline";
 
 export class TimelineApp extends HandlebarsApplicationMixin(ApplicationV2) {
   constructor(options = {}) {
-    super({ ...options, id: "tta-timeline" });
+    super({ ...options, id: TIMELINE_ID });
     const current = getCurrentDate();
     this.viewYear = current.year;
     this.viewMonth = current.month;
     this.filter = "all";
+  }
+
+  /**
+   * Open the timeline window, or bring it forward if it is already up.
+   *
+   * The window has a single id, so there is only ever one of it. Constructing
+   * another while the first is on screen started that one over at the current
+   * date with no filter, discarding wherever the user had browsed to; the open
+   * one is brought to the front as it stands instead.
+   */
+  static open() {
+    const existing = foundry.applications.instances?.get(TIMELINE_ID);
+    if (existing instanceof TimelineApp) {
+      if (existing.rendered && existing.element?.isConnected) {
+        existing.bringToFront?.();
+        return existing;
+      }
+      return existing.render({ force: true });
+    }
+    return new TimelineApp().render({ force: true });
   }
 
   /** Ticket of the most recent events repaint, used to discard stale ones. */
@@ -89,9 +107,14 @@ export class TimelineApp extends HandlebarsApplicationMixin(ApplicationV2) {
     return t("TTA.Timeline.Title");
   }
 
-  /** The Age that frames the current view, based on the browsed year. */
+  /**
+   * The Age that frames the current view, based on the browsed year. A year no
+   * Age covers is framed by the Age it is listed with, so the window opens on
+   * an Age - and on that year's events - even while the campaign stands
+   * between two.
+   */
   get viewAge() {
-    return getAgeForYear(this.viewYear) ?? getCurrentAge();
+    return getAgeForYear(this.viewYear) ?? findListingAge(getVisibleAges(), this.viewYear);
   }
 
   async _prepareContext() {
@@ -110,7 +133,9 @@ export class TimelineApp extends HandlebarsApplicationMixin(ApplicationV2) {
       events = getEventsForYear(this.viewYear);
       years = [this.viewYear];
     } else if (age) {
-      events = getEventsForAge(age);
+      // The Age's own events and those in the uncovered years listed with it,
+      // so that stepping through the Ages passes every event once.
+      events = getEventsListedWithAge(age, getVisibleAges());
       // Deliberately not every year the Age covers. The grouping below adds a
       // year as soon as an event falls in it, and the filter drops the years
       // that stay empty, so listing the span up front only built groups to
@@ -121,14 +146,20 @@ export class TimelineApp extends HandlebarsApplicationMixin(ApplicationV2) {
       years = [this.viewYear];
     }
 
-    events = this.#applyFilter(events);
+    events = this.#applyFilter(events, mode, current);
     const decorated = await Promise.all(events.map(async event => this.#decorate(event, gm)));
     // A year with nothing recorded in it is never listed, in any mode: the
     // spine above already shows the shape of the span, so the list below only
     // carries the years that actually hold events.
+    const expanded = mode === TIMELINE_MODE.EXPANDED && !!age;
     const grouped = groupEventsByYear(decorated, years, current.year)
       .filter(group => group.events.length > 0)
-      .map(group => ({ ...group, yearLabel: formatYear(group.year, calendar) }));
+      .map(group => ({
+        ...group,
+        yearLabel: formatYear(group.year, calendar),
+        // A year listed with this Age without being part of it.
+        outsideAge: expanded && !containsYear(age, group.year)
+      }));
 
     const bands = this.#buildBands(age);
     const ticks = this.#buildTicks(mode, calendar, current, age, events);
@@ -234,33 +265,13 @@ export class TimelineApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
     if (!age) return ticks;
 
-    const years = new Set(events.map(event => parseKey(event.dateKey)?.year));
-    const start = Number(age.startYear);
-    const last = endYear(age);
-    const span = ageLength(age) || 1;
-
-    // Regular ticks every fifth year while that stays legible, then spaced out
-    // so their number is bounded however long the Age is. A span of thousands
-    // of years used to draw a tick per year: unreadable, and built by a loop
-    // whose length was the Age's duration.
-    const step = Math.max(TICK_INTERVAL, Math.ceil(span / TICK_BUDGET));
-
-    const marked = new Set();
-    for (let year = start; year <= last; year += step) marked.add(year);
-    for (const year of years) {
-      if (Number.isInteger(year) && year >= start && year <= last) marked.add(year);
-    }
-    if (current.year >= start && current.year <= last) marked.add(current.year);
-
-    return [...marked].sort((a, b) => a - b).map(year => {
-      const hasEvent = years.has(year);
-      const isCurrent = year === current.year;
-      return {
-        position: (((year - start + 0.5) / span) * 100).toFixed(3),
-        label: (isCurrent || hasEvent || year % 20 === 0) ? year : "",
-        hasEvent,
-        isCurrent
-      };
+    // The spine spans the Age itself, so an event in an uncovered year listed
+    // with it has a row below and no mark here.
+    return buildAgeTicks({
+      startYear: Number(age.startYear),
+      endYear: endYear(age),
+      eventYears: events.map(event => parseKey(event.dateKey)?.year),
+      currentYear: current.year
     });
   }
 
@@ -293,20 +304,29 @@ export class TimelineApp extends HandlebarsApplicationMixin(ApplicationV2) {
     return choices.map(choice => ({ ...choice, selected: choice.value === this.filter }));
   }
 
-  #applyFilter(events) {
+  /**
+   * Narrow the listed events by the chosen filter.
+   *
+   * "This year" and "This month" mean the browsed year and month in the modes
+   * that browse by them. Expanded mode browses by Age and shows no year to
+   * mean: the one it keeps is whichever the view last stood on, which after
+   * stepping to another Age is that Age's first year. There the two filters
+   * mean the campaign's current year and month instead.
+   */
+  #applyFilter(events, mode, current) {
     const age = this.viewAge;
+    const byAge = mode === TIMELINE_MODE.EXPANDED;
+    const year = byAge ? current.year : this.viewYear;
+    const month = byAge ? current.month : this.viewMonth;
     switch (this.filter) {
       case "age":
-        return age ? events.filter(event => {
-          const year = parseKey(event.dateKey)?.year;
-          return year >= Number(age.startYear) && year <= endYear(age);
-        }) : events;
+        return age ? events.filter(event => containsYear(age, parseKey(event.dateKey)?.year)) : events;
       case "year":
-        return events.filter(event => parseKey(event.dateKey)?.year === this.viewYear);
+        return events.filter(event => parseKey(event.dateKey)?.year === year);
       case "month":
         return events.filter(event => {
           const parsed = parseKey(event.dateKey);
-          return parsed?.year === this.viewYear && parsed?.month === this.viewMonth;
+          return parsed?.year === year && parsed?.month === month;
         });
       case "players":
         return events.filter(event => event.visibility === VISIBILITY.PLAYERS);
@@ -467,10 +487,7 @@ export class TimelineApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   static onAddEvent() {
     if (!canManageEvents()) return ui.notifications.warn(t("TTA.Errors.EventGMOnly"));
-    new EventEditorApp({
-      dateKey: null,
-      event: null
-    }).render({ force: true });
+    EventEditorApp.open({ dateKey: null, event: null });
   }
 
   /**
@@ -499,14 +516,14 @@ export class TimelineApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
     const note = notes.find(candidate => candidate.uuid === result.uuid);
     if (!note) return ui.notifications.warn(t("TTA.Errors.NoteMissing"));
-    new EventEditorApp({ sourceNote: note }).render({ force: true });
+    EventEditorApp.open({ sourceNote: note });
   }
 
   static onEditEvent(event, target) {
     if (!canManageEvents()) return ui.notifications.warn(t("TTA.Errors.EventGMOnly"));
     const record = getEvent(target.dataset.eventId);
     if (!record) return ui.notifications.warn(t("TTA.Errors.EventMissing"));
-    new EventEditorApp({ event: record }).render({ force: true });
+    EventEditorApp.open({ event: record });
   }
 
   static async onDeleteEvent(event, target) {

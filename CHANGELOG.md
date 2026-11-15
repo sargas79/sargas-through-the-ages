@@ -2,6 +2,24 @@
 
 All notable changes to Sargas Through the Ages are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.3] - 2026-11-15
+
+### Fixed
+
+- A GM-only timeline event now appears as soon as it is saved. Adding or editing one from the timeline left the open timeline and calendar windows showing the old list until they were closed and reopened, because only the GM-only store changed and nothing repainted for it. The same held for an event belonging to a party, on the GM's screen and on that party's players', and for a change that touched only a hidden Age.
+- GM-only events and hidden Ages no longer vanish when the "Calendar (GM only)" journal entry is outside the Calendar Notes folder. The entry was only looked for inside the folder, so dragging it out, or deleting the folder and letting the module make it again, hid everything it held and the next save started a second, empty one. The entry is now found wherever it is, and a world left with two is read as one. The same applies to each party's entry, and a party entry outside the folder now loses a player who leaves the party like any other.
+- **Rebuild notes folder** now brings the GM-only and party entries back into the folder along with the date entries, and merges any duplicates into one. An emptied duplicate is deleted, unless it has journal pages of its own, in which case it is kept as an ordinary entry.
+- Deleting a timeline event that was created from a note no longer leaves the note marked "On timeline" for good. The note can be promoted again, and it is offered again under **Create from note**. Notes already stuck that way are released too.
+- Promoting a GM-only note no longer forces the event to be player-visible when the note's author is not a current GM, as after a GM account is deleted or demoted. The choice of visibility stays with the GM and starts at GM-only. A note whose author no longer exists is treated the same way.
+- In Expanded mode, an event dated in a year no Age covers can now be reached. Such a year is listed with the Age that ended before it (or the first Age, for a year before them all) and is labelled "No Age"; previously it showed in no Age's list. **This Age** still narrows the list to the Age's own years.
+- The timeline's spine shows years again for an Age that does not start on a round year. Regular ticks were counted from the Age's first year but labelled only on years divisible by twenty, so an Age starting in year 1 had no labels at all. Ticks now stand on round years and every few of them is labelled.
+- **This year** and **This month** in Expanded mode now mean the campaign's current year and month. After stepping to another Age they silently meant that Age's first year.
+
+### Changed
+
+- A calendar day with notes now shows a note icon in its top-left corner, with the number of notes beside it when there are two or more. It replaces the small round dots, which were easy to mistake for the moon-phase discs and the party marks. The legend shows the same icon.
+- **Open Timeline** brings the timeline forward if it is already open instead of starting it over at the current date with no filter. The event editor does the same for an event or note it already has open.
+
 ## [3.4.2] - 2026-11-07
 
 ### Fixed
@@ -239,6 +257,7 @@ Initial release, targeting Foundry VTT v14 build 366.
 - Full English localisation and a versioned, idempotent data-migration framework.
 - Public API at `game.modules.get("through-the-ages").api`.
 
+[3.4.3]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v3.4.3
 [3.4.2]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v3.4.2
 [3.4.1]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v3.4.1
 [3.4.0]: https://github.com/sargas79/sargas-through-the-ages/releases/tag/v3.4.0

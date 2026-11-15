@@ -50,6 +50,26 @@ export function findAgeForYear(ages = [], year) {
 }
 
 /**
+ * The Age a year is listed under when the timeline is browsed Age by Age.
+ *
+ * Ages need not cover every year: there can be a gap between two, and years
+ * before the first and after the last. Something dated there still has to be
+ * reachable by stepping through the Ages, so each uncovered year is listed
+ * with the Age that ended most recently before it, and a year before every
+ * Age with the first. Null only when there are no Ages at all.
+ */
+export function findListingAge(ages = [], year) {
+  const containing = findAgeForYear(ages, year);
+  if (containing) return containing;
+  const ordered = chronological(ages);
+  let latestEnded = null;
+  for (const age of ordered) {
+    if (endYear(age) < year && (!latestEnded || endYear(age) >= endYear(latestEnded))) latestEnded = age;
+  }
+  return latestEnded ?? ordered[0] ?? null;
+}
+
+/**
  * Detect Ages whose year ranges intersect.
  * @returns {Array<{a:object, b:object}>} conflicting pairs
  */

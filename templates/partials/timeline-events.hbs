@@ -24,7 +24,12 @@
   <ol class="tta-year-list">
     {{#each groups}}
       <li class="tta-year {{#if isCurrent}}tta-year-current{{/if}}">
-        <div class="tta-year-gutter">{{yearLabel}}</div>
+        <div class="tta-year-gutter">
+          {{yearLabel}}
+          {{#if outsideAge}}
+            <span class="tta-year-outside" data-tooltip="{{localize "TTA.Timeline.OutsideAgeHint"}}">{{localize "TTA.Timeline.OutsideAge"}}</span>
+          {{/if}}
+        </div>
         <ul class="tta-year-events">
           {{#each events}}
             {{> "modules/sargas-through-the-ages/templates/partials/timeline-event.hbs"}}

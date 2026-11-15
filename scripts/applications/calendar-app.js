@@ -195,9 +195,9 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
         moons: gridMoons
           .map(moon => describePhase(moon, absoluteDay))
           .filter(phase => phase.isPhaseChange),
-        // The cell shows at most three note dots and two event dots; the exact
-        // counts stay in the cell's accessible label.
-        noteDots: new Array(Math.min(notes, 3)).fill(true),
+        // Notes are one glyph with a count from two on, events at most two
+        // marks; the exact counts stay in the cell's accessible label.
+        showNoteCount: notes > 1,
         eventDots: new Array(Math.min(events, 2)).fill(true),
         dateKey: dayKey(date.year, date.month, date.day),
         weekday: weekdayName(date, calendar),
@@ -522,7 +522,7 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   static onOpenTimeline() {
     if (!canViewTimeline()) return ui.notifications.warn(t("TTA.Errors.TimelineHidden"));
-    new TimelineApp().render({ force: true });
+    TimelineApp.open();
   }
 
   static onAddDayNote() {
@@ -575,7 +575,7 @@ export class CalendarApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const note = this.#findNote(target.dataset.uuid);
     if (!note) return ui.notifications.warn(t("TTA.Errors.NoteMissing"));
     if (note.scope !== SCOPE.DAY) return ui.notifications.warn(t("TTA.Errors.PromoteDayOnly"));
-    new EventEditorApp({ sourceNote: note }).render({ force: true });
+    EventEditorApp.open({ sourceNote: note });
   }
 
   static async onOpenJournal(event, target) {

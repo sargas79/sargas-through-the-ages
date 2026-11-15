@@ -10,11 +10,21 @@
             data-day="{{day}}"
             aria-pressed="{{#if isSelected}}true{{else}}false{{/if}}"
             aria-label="{{label}}">
+      {{#if hasNotes}}
+        {{!-- A day with notes carries a note glyph in its top-left corner, a
+              shape and a place no other mark uses: the moons are discs along
+              the bottom and the party marks are dots on the right. The count
+              beside it appears from two notes on; the exact count is in the
+              cell's aria-label either way. --}}
+        <span class="tta-day-note" aria-hidden="true">
+          <i class="fa-solid fa-note-sticky"></i>
+          {{#if showNoteCount}}<span class="tta-day-note-count">{{noteCount}}</span>{{/if}}
+        </span>
+      {{/if}}
       <span class="tta-day-number">{{day}}</span>
-      {{!-- Up to three note dots then up to two event dots: the exact counts
-            live in the cell's aria-label, not in the marks. --}}
+      {{!-- Up to two event marks: the exact count lives in the cell's
+            aria-label, not in the marks. --}}
       <span class="tta-day-marks" aria-hidden="true">
-        {{#each noteDots}}<span class="tta-dot-note"></span>{{/each}}
         {{#each eventDots}}<span class="tta-dot-event"></span>{{/each}}
       </span>
       {{#if moons.length}}

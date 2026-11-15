@@ -678,12 +678,32 @@
 .tta .tta-day-marks { display: flex; gap: 3px; height: 5px; align-items: center; }
 .tta .tta-day-moons { display: flex; gap: 2px; height: 6px; align-items: center; }
 
-.tta .tta-dot-note {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--tta-accent-400);
+/* The note glyph sits in the cell's top-left corner, opposite the party
+   marks, so it never shares a row with the round moon discs. */
+.tta .tta-day-note {
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 9px;
+  line-height: 1;
+  color: var(--tta-accent-400);
+  pointer-events: none;
 }
+
+.tta .tta-day-note-count {
+  font-size: 9px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.tta .tta-day-current .tta-day-note,
+.tta .tta-day-selected .tta-day-note { color: var(--tta-accent-200); }
+
+/* The legend's copy of the glyph, at the size of the text beside it. */
+.tta .tta-legend-note { font-size: 10px; color: var(--tta-accent-400); }
 
 .tta .tta-dot-event {
   width: 4px;
@@ -1047,6 +1067,17 @@
 }
 
 .tta .tta-year-current .tta-year-gutter { font-size: 14px; color: var(--tta-accent-200); }
+
+/* A year listed with the browsed Age without being part of it. */
+.tta .tta-year-outside {
+  display: block;
+  font-family: var(--tta-font);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--tta-text) 38%, transparent);
+}
 
 .tta .tta-year-events {
   flex: 1;

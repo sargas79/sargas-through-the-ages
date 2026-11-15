@@ -38,10 +38,31 @@ export class EventEditorApp extends HandlebarsApplicationMixin(ApplicationV2) {
    * @param {string} [config.dateKey]    prefilled date for a new event
    */
   constructor({ event = null, sourceNote = null, dateKey = null, ...options } = {}) {
-    super({ ...options, id: `tta-event-editor-${event?.id ?? sourceNote?.id ?? "new"}` });
+    super({ ...options, id: EventEditorApp.idFor({ event, sourceNote }) });
     this.event = event;
     this.sourceNote = sourceNote;
     this.dateKey = event?.dateKey ?? sourceNote?.dateKey ?? dateKey ?? null;
+  }
+
+  /** The id an editor for this event, note or new event is rendered under. */
+  static idFor({ event = null, sourceNote = null } = {}) {
+    return `tta-event-editor-${event?.id ?? sourceNote?.id ?? "new"}`;
+  }
+
+  /**
+   * Open the editor for an event, a note being promoted, or a new event.
+   *
+   * An editor already on screen for the same thing is brought forward as it
+   * is. A second one would take the same id, and with it replace a form the
+   * user may be halfway through filling in.
+   */
+  static open(config = {}) {
+    const existing = foundry.applications.instances?.get(EventEditorApp.idFor(config));
+    if (existing instanceof EventEditorApp && existing.rendered && existing.element?.isConnected) {
+      existing.bringToFront?.();
+      return existing;
+    }
+    return new EventEditorApp(config).render({ force: true });
   }
 
   static DEFAULT_OPTIONS = {

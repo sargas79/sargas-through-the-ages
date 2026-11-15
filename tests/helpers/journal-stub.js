@@ -21,6 +21,7 @@ function delivered(ownership, user) {
 /** One note page: the slice of JournalEntryPage the journal service touches. */
 class StubPage {
   constructor(entry, { _id, name, type = "text", text = {}, ownership = {}, flags = {} }) {
+    this.documentName = "JournalEntryPage";
     this.parent = entry;
     this.id = _id;
     this.uuid = `JournalEntry.${entry.id}.JournalEntryPage.${_id}`;
@@ -48,6 +49,7 @@ class StubPage {
 
 class StubEntry {
   constructor(world, { id, name, folder = null, ownership = {}, flags = {} }) {
+    this.documentName = "JournalEntry";
     this.world = world;
     this.id = id;
     this.name = name;
@@ -73,6 +75,11 @@ class StubEntry {
   async setFlag(scope, key, value) {
     this.flags[scope] ??= {};
     this.flags[scope][key] = value;
+    return this;
+  }
+
+  async unsetFlag(scope, key) {
+    if (this.flags[scope]) delete this.flags[scope][key];
     return this;
   }
 
@@ -166,6 +173,12 @@ export function installJournalWorld({ isGM = true, userId = "gm1" } = {}) {
       const entry = new StubEntry(world, { ...data, id: `entry${++nextId}` });
       entries.push(entry);
       return entry;
+    },
+    updateDocuments: async updates => {
+      for (const update of updates) {
+        await entries.find(entry => entry.id === update._id)?.update(update);
+      }
+      return updates;
     }
   };
   globalThis.foundry = { applications: {}, utils: { randomID: () => `id${++nextId}` } };
